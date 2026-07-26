@@ -1,19 +1,19 @@
 #[derive(Debug)]
-enum Card {
+pub enum Card {
     Rock,
     Paper,
     Scissors,
 }
 
 #[derive(Debug, PartialEq, Eq)]
-enum PlayResult{
+pub enum PlayResult{
     Win,
     Lose,
     Draw
 }
 
 impl Card {
-    fn play_against(&self, other: &Card) -> PlayResult {
+    pub fn play_against(&self, other: &Card) -> PlayResult {
         match (self, other) {
             (Card::Rock, Card::Scissors)
                 | (Card::Scissors, Card::Paper)
