@@ -6,7 +6,7 @@ pub enum Card {
 }
 
 #[derive(Debug, PartialEq, Eq)]
-pub enum PlayResult{
+pub enum PlayResult {
     Win,
     Lose,
     Draw
@@ -33,7 +33,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn paper_beats_rock() {
+    fn play_against_returns_expected_result() {
         let cases = [
             // Rock Case
             (Card::Rock, Card::Scissors, PlayResult::Win),

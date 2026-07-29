@@ -1,7 +1,7 @@
-pub use super::card;  
+use super::card;  
 
 pub struct Player {
-    name: String,
-    star: usize,
-    cards: Vec<card::Card>,
+    pub name: String,
+    pub star: usize,
+    pub cards: Vec<card::Card>,
 }
