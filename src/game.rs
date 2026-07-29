@@ -16,6 +16,27 @@ impl Game {
 
         self.players.push(player);
     }
+
+    pub fn play(mut self) {
+        let star = 3;
+        let total_card = 4;
+        
+        for player in &mut self.players {
+            let mut initial_cards = Vec::new();
+            for _ in 0..total_card {
+                initial_cards.push(card::Card::Rock);
+                initial_cards.push(card::Card::Paper);
+                initial_cards.push(card::Card::Scissors);
+            }
+
+            player.init(star, initial_cards);
+        }
+
+        self.is_playing = true;
+
+        // Loop until all cards are played
+    }
+
 }
 
 #[cfg(test)]
