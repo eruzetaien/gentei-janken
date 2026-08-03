@@ -1,12 +1,11 @@
+use std::mem;
+
 pub mod card;
 pub mod player;
 pub mod duel;
 
 pub struct Game {
     players: Vec<player::Player>,
-    rock_cards: Vec<card:: Card>,
-    paper_cards: Vec<card:: Card>,
-    scissors_cards: Vec<card:: Card>,
     is_playing: bool,
 }
 
@@ -19,11 +18,11 @@ impl Game {
 
     pub fn play(mut self) {
         let star = 3;
-        let total_card = 4;
+        let total_card_per_type = 4;
         
         for player in &mut self.players {
             let mut initial_cards = Vec::new();
-            for _ in 0..total_card {
+            for _ in 0..total_card_per_type {
                 initial_cards.push(card::Card::Rock);
                 initial_cards.push(card::Card::Paper);
                 initial_cards.push(card::Card::Scissors);
@@ -35,6 +34,25 @@ impl Game {
         self.is_playing = true;
 
         // Loop until all cards are played
+        let total_played_rock_card = 0;
+        let total_played_paper_card = 0;
+        let total_played_scissors_card = 0;
+
+        let mut waiting_players = mem::take(&mut self.players);
+
+        let total_cards_per_type = total_card_per_type * self.players.len(); 
+        while total_played_rock_card != total_cards_per_type
+            || total_played_paper_card != total_cards_per_type
+            || total_played_scissors_card != total_cards_per_type {
+            let player1 = waiting_players.pop().unwrap();
+            let player2 = waiting_players.pop().unwrap();
+
+            let duel = duel::Duel {
+                player1: player1,
+                player2: player2,
+            };
+            duel.play();
+        }
     }
 
 }
@@ -47,9 +65,6 @@ mod tests {
     fn add_player_works_when_game_is_not_started() {
         let mut not_starting_game = Game {
             players: Vec::new(),
-            rock_cards: Vec::new(),
-            paper_cards: Vec::new(),
-            scissors_cards: Vec::new(),
             is_playing: false,
         };
 

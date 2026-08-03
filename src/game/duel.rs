@@ -1,6 +1,12 @@
 use super::player; 
 
 pub struct Duel {
-    player1: player::Player,
-    player2: player::Player,
+    pub player1: player::Player,
+    pub player2: player::Player,
+}
+
+impl Duel {
+    pub fn play(self) {
+        
+    }
 }

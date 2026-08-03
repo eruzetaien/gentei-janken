@@ -33,7 +33,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn play_against_returns_expected_result() {
+    fn play_against_works() {
         let cases = [
             // Rock Case
             (Card::Rock, Card::Scissors, PlayResult::Win),
