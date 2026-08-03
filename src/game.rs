@@ -47,10 +47,10 @@ impl Game {
             let player1 = waiting_players.pop().unwrap();
             let player2 = waiting_players.pop().unwrap();
 
-            let duel = duel::Duel {
+            let mut duel = duel::Duel {
                 player1: player1,
                 player2: player2,
-            };
+            }; 
             duel.play();
         }
     }

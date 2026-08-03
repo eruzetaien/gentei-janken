@@ -6,7 +6,9 @@ pub struct Duel {
 }
 
 impl Duel {
-    pub fn play(self) {
-        
+    pub fn play(&mut self) {
+        let mut player1_card = None;
+
+        player1_card = self.player1.set_card_to_play();
     }
 }
