@@ -51,6 +51,9 @@ impl Game {
 
         println!("Game start!");
         while returned_card_count.total() < total_cards  {
+            if waiting_players.len() < 2 {
+                break;
+            } 
             let player1 = waiting_players.pop().unwrap();
             let player2 = waiting_players.pop().unwrap();
 
@@ -76,8 +79,20 @@ impl Game {
                     losers.push(player);
                 }
             }
-
         }
+        println!("\nGame finished!");
+
+        println!("");
+        println!("Winners: {}", winners.len());
+        for player in &winners {
+            println!("  - {:?} ({} stars)", player.name, player.star);
+        }
+
+        println!("Losers: {}", losers.len());
+        for player in &losers {
+            println!("  - {:?} ({} stars)", player.name, player.star);
+        }
+
     }
 
 }
