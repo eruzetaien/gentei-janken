@@ -34,16 +34,12 @@ impl Game {
         self.is_playing = true;
 
         // Loop until all cards are played
-        let total_played_rock_card = 0;
-        let total_played_paper_card = 0;
-        let total_played_scissors_card = 0;
+        let returned_card_count = CardCount {rock: 0, paper: 0, scissors: 0};
 
         let mut waiting_players = mem::take(&mut self.players);
 
-        let total_cards_per_type = total_card_per_type * self.players.len(); 
-        while total_played_rock_card != total_cards_per_type
-            || total_played_paper_card != total_cards_per_type
-            || total_played_scissors_card != total_cards_per_type {
+        let total_cards = total_card_per_type * 3 * self.players.len(); 
+        while returned_card_count.total() < total_cards  {
             let player1 = waiting_players.pop().unwrap();
             let player2 = waiting_players.pop().unwrap();
 
@@ -55,6 +51,28 @@ impl Game {
         }
     }
 
+}
+
+pub struct CardCount {
+    pub rock: usize,
+    pub paper: usize,
+    pub scissors: usize,
+}
+
+impl CardCount {
+    fn total(&self) -> usize {
+        self.rock + self.paper + self.scissors
+    }
+
+    pub fn add_cards(&mut self, cards: Vec<card::Card>) {
+        for card in cards {
+            match card {
+                card::Card::Rock => self.rock += 1,
+                card::Card::Paper => self.paper += 1,
+                card::Card::Scissors => self.scissors += 1,
+            }
+        }
+    }
 }
 
 #[cfg(test)]

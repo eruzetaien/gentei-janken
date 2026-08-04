@@ -1,3 +1,5 @@
+use std::mem;
+
 use super::card;  
 
 pub struct Player {
@@ -21,6 +23,20 @@ impl Player {
         let card = self.cards.remove(rand_index);
 
         Some(card)
+    }
+
+    pub fn win_duel(&mut self) {
+        self.star += 1;
+    }
+
+    pub fn lose_duel(&mut self) -> Vec<card::Card> {
+        self.star -= 1;
+
+        if self.star <= 0 {
+            return mem::take(&mut self.cards);
+        }
+
+        vec![] 
     }
 }
 
