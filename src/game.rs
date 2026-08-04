@@ -10,6 +10,12 @@ pub struct Game {
 }
 
 impl Game {
+    pub fn new () -> Game {
+        Game{
+            players: Vec::new(),
+            is_playing: false,
+        }
+    }
     pub fn add_player(&mut self, player: player::Player) {
         if self.is_playing {return;}
 
@@ -18,8 +24,10 @@ impl Game {
 
     pub fn play(mut self) {
         let star = 3;
+        let target_star = 5;
         let total_card_per_type = 4;
         
+        println!("Init players");
         for player in &mut self.players {
             let mut initial_cards = Vec::new();
             for _ in 0..total_card_per_type {
@@ -30,24 +38,45 @@ impl Game {
 
             player.init(star, initial_cards);
         }
+        let total_cards = total_card_per_type * 3 * self.players.len(); 
 
         self.is_playing = true;
 
         // Loop until all cards are played
-        let returned_card_count = CardCount {rock: 0, paper: 0, scissors: 0};
+        let mut returned_card_count = CardCount {rock: 0, paper: 0, scissors: 0};
 
         let mut waiting_players = mem::take(&mut self.players);
+        let mut winners = Vec::new();
+        let mut losers = Vec::new();
 
-        let total_cards = total_card_per_type * 3 * self.players.len(); 
+        println!("Game start!");
         while returned_card_count.total() < total_cards  {
             let player1 = waiting_players.pop().unwrap();
             let player2 = waiting_players.pop().unwrap();
 
-            let mut duel = duel::Duel {
+            let duel = duel::Duel {
                 player1: player1,
                 player2: player2,
             }; 
-            duel.play();
+            let result = duel.play();
+            
+            returned_card_count.add_cards(result.returned_cards);
+            
+            for player in [result.player1, result.player2] {
+                if !player.cards.is_empty() && player.star > 0 {
+                    waiting_players.push(player);
+                } else if player.star > target_star {
+                    println!( "{:?} win with star: {:?}",
+                        &player.name,
+                        &player.star,
+                    );
+                    winners.push(player);
+                } else {
+                    println!( "{:?} lose", &player.name);
+                    losers.push(player);
+                }
+            }
+
         }
     }
 

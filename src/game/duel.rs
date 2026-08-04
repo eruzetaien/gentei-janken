@@ -18,6 +18,16 @@ impl Duel {
         let player2_card = self.player2.set_card_to_play().unwrap();
 
         let player1_result = player1_card.play_against(&player2_card);
+
+        println!(
+            "Duel: {:?} played {:?} vs {:?} played {:?} -> {:?}",
+            self.player1.name,
+            player1_card,
+            self.player2.name,
+            player2_card,
+            player1_result
+        );
+
         let mut returned_cards = vec![player1_card, player2_card];
         match player1_result {
             card::PlayResult::Win => {
@@ -34,7 +44,7 @@ impl Duel {
             },
             card::PlayResult::Draw => {}
         }
-
+        
         DuelResult {
             player1: self.player1, 
             player2: self.player2, 
@@ -74,5 +84,6 @@ mod tests {
         assert_eq!(result.player1.star, 2);
         assert_eq!(result.player2.star, 0);
         assert_eq!(result.returned_cards.len(), 2 + 1);
+        assert!(result.player2.cards.is_empty());
     }
 }
