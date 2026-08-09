@@ -10,7 +10,7 @@ pub struct Game {
 }
 
 impl Game {
-    pub fn new () -> Game {
+   pub fn new () -> Game {
         Game{
             players: Vec::new(),
             is_playing: false,
@@ -38,19 +38,18 @@ impl Game {
 
             player.init(star, initial_cards);
         }
-        let total_cards = total_card_per_type * 3 * self.players.len(); 
-
         self.is_playing = true;
 
         // Loop until all cards are played
-        let mut returned_card_count = CardCount {rock: 0, paper: 0, scissors: 0};
+        let total_playable_card_per_type = total_card_per_type * self.players.len();
+        let mut playable_card_count = CardCount::new(total_playable_card_per_type);
 
         let mut waiting_players = mem::take(&mut self.players);
         let mut winners = Vec::new();
         let mut losers = Vec::new();
 
         println!("Game start!");
-        while returned_card_count.total() < total_cards  {
+        while playable_card_count.total() > 0  {
             if waiting_players.len() < 2 {
                 break;
             } 
@@ -61,9 +60,9 @@ impl Game {
                 player1: player1,
                 player2: player2,
             }; 
-            let result = duel.play();
+            let result = duel.play(&playable_card_count);
             
-            returned_card_count.add_cards(result.returned_cards);
+            playable_card_count.remove(result.returned_cards);
             
             for player in [result.player1, result.player2] {
                 if !player.cards.is_empty() && player.star > 0 {
@@ -102,18 +101,35 @@ pub struct CardCount {
     pub paper: usize,
     pub scissors: usize,
 }
-
 impl CardCount {
+    fn new(initial_count: usize) -> CardCount {
+        CardCount{
+            rock: initial_count,
+            paper: initial_count,
+            scissors: initial_count,
+        }
+    }
+
     fn total(&self) -> usize {
         self.rock + self.paper + self.scissors
     }
 
-    pub fn add_cards(&mut self, cards: Vec<card::Card>) {
+    pub fn add(&mut self, cards: Vec<card::Card>) {
         for card in cards {
             match card {
                 card::Card::Rock => self.rock += 1,
                 card::Card::Paper => self.paper += 1,
                 card::Card::Scissors => self.scissors += 1,
+            }
+        }
+    }
+
+    pub fn remove(&mut self, cards: Vec<card::Card>) {
+        for card in cards {
+            match card {
+                card::Card::Rock => self.rock -= 1,
+                card::Card::Paper => self.paper -= 1,
+                card::Card::Scissors => self.scissors -= 1,
             }
         }
     }
@@ -134,6 +150,7 @@ mod tests {
             name: "player1".to_string(),
             star: 0,
             cards: Vec::new(),
+            strategy: Box::new(player::RandomStrategy{}),
         };
 
         not_starting_game.add_player(new_player);

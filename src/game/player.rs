@@ -1,11 +1,37 @@
 use std::mem;
 
-use super::card;  
+use super::card; 
+use super::CardCount;
+
+pub trait PlayStrategy {
+    fn choose_card(
+        &self,
+        cards: &mut Vec<card::Card>,
+        returned_cards: &CardCount
+    ) -> card::Card;
+}
+
+pub struct RandomStrategy;
+pub struct BalancedStrategy;
+pub struct ProbabilityStrategy;
+
+impl PlayStrategy for RandomStrategy {
+    fn choose_card(
+        &self,
+        cards: &mut Vec<card::Card>,
+        _returned_cards: &CardCount
+    ) -> card::Card 
+    {
+        let rand_index = rand::random_range(0..cards.len()); 
+        cards.remove(rand_index)
+    }
+}
 
 pub struct Player {
     pub name: String,
     pub star: usize,
     pub cards: Vec<card::Card>,
+    pub strategy: Box<dyn PlayStrategy>,
 }
 
 impl Player {
@@ -14,15 +40,10 @@ impl Player {
         self.cards = cards;
     }
 
-    pub fn set_card_to_play(&mut self) -> Option<card::Card>{
-        if self.cards.is_empty() {
-            return None;
-        }
+    pub fn set_card_to_play(&mut self, returned_cards: &CardCount ) -> card::Card{
+        assert!(self.cards.is_empty() == false);
         
-        let rand_index = rand::random_range(0..self.cards.len()); 
-        let card = self.cards.remove(rand_index);
-
-        Some(card)
+        return self.strategy.choose_card(&mut self.cards, returned_cards);
     }
 
     pub fn win_duel(&mut self) {
@@ -50,6 +71,7 @@ mod test {
             name: "player1".to_string(),
             star: 0,
             cards: Vec::new(),
+            strategy: Box::new(RandomStrategy),
         };
 
         let star = 3;
@@ -72,7 +94,7 @@ mod test {
     }
 
     #[test]
-    fn set_card_to_play_works() {
+    fn random_strategy_works() {
         let mut player = Player {
             name: "player1".to_string(),
             star: 0,
@@ -81,11 +103,12 @@ mod test {
                 card::Card::Paper,
                 card::Card::Scissors,
             ],
+            strategy: Box::new(RandomStrategy),
         };
 
-        let selected_card = player.set_card_to_play();
+        let card_counts = CardCount{rock:0, paper:0, scissors:0}; 
+        let _selected_card = player.set_card_to_play(&card_counts);
 
-        assert!(selected_card.is_some());
         assert_eq!(player.cards.len(), 2);
     }
 
