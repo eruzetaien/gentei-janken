@@ -8,7 +8,7 @@ fn main() {
         name: "player1".to_string(),
         star: 0,
         cards: Vec::new(),
-        strategy: Box::new(player::RandomStrategy),
+        strategy: Box::new(player::BalancedStrategy),
     };
 
     let player2 = player::Player{

@@ -15,17 +15,6 @@ pub struct RandomStrategy;
 pub struct BalancedStrategy;
 pub struct ProbabilityStrategy;
 
-impl PlayStrategy for RandomStrategy {
-    fn choose_card(
-        &self,
-        cards: &mut Vec<card::Card>,
-        _returned_cards: &CardCount
-    ) -> card::Card 
-    {
-        let rand_index = rand::random_range(0..cards.len()); 
-        cards.remove(rand_index)
-    }
-}
 
 pub struct Player {
     pub name: String,
@@ -58,6 +47,68 @@ impl Player {
         }
 
         vec![] 
+    }
+}
+
+impl PlayStrategy for RandomStrategy {
+    fn choose_card(
+        &self,
+        cards: &mut Vec<card::Card>,
+        _returned_cards: &CardCount
+    ) -> card::Card 
+    {
+        let rand_index = rand::random_range(0..cards.len()); 
+        cards.remove(rand_index)
+    }
+}
+
+impl PlayStrategy for BalancedStrategy {
+    fn choose_card(
+        &self,
+        cards: &mut Vec<card::Card>,
+        _returned_cards: &CardCount
+    ) -> card::Card 
+    {
+        let mut rock_count_idx = (0, 0);
+        let mut paper_count_idx = (0, 0);
+        let mut scissors_count_idx = (0,0);
+
+        for (idx, card) in cards.iter().enumerate() {
+            match *card {
+                card::Card::Rock => {
+                    rock_count_idx.0 += 1;
+                    rock_count_idx.1 = idx;
+                },
+                card::Card::Paper => {
+                    paper_count_idx.0 += 1;
+                    paper_count_idx.1 = idx;
+                },
+                card::Card::Scissors => {
+                    scissors_count_idx.0 += 1;
+                    scissors_count_idx.1 = idx;
+                },
+            }
+        }
+
+        let choices = [
+            rock_count_idx, paper_count_idx, scissors_count_idx
+        ];
+        
+        let max_count = choices
+            .iter()
+            .map(|(count,_)| *count)
+            .max()
+            .unwrap_or(0);
+
+        let candidates: Vec<_> = choices
+            .iter()
+            .filter(|(count, _)| *count == max_count)
+            .collect();
+
+        let chosen = candidates[rand::random_range(0..candidates.len())];
+        let chosen_index = chosen.1; 
+
+        cards.remove(chosen_index)
     }
 }
 
@@ -106,10 +157,30 @@ mod test {
             strategy: Box::new(RandomStrategy),
         };
 
-        let card_counts = CardCount{rock:0, paper:0, scissors:0}; 
-        let _selected_card = player.set_card_to_play(&card_counts);
+        let playable_card_count = CardCount::new(0); 
+        let _selected_card = player.set_card_to_play(&playable_card_count);
 
         assert_eq!(player.cards.len(), 2);
     }
 
+    #[test]
+    fn balanced_strategy_works() {
+        let mut player = Player {
+            name: "player1".to_string(),
+            star: 0,
+            cards: vec![
+                card::Card::Rock,
+                card::Card::Rock,
+                card::Card::Paper,
+                card::Card::Scissors,
+            ],
+            strategy: Box::new(BalancedStrategy),
+        };
+
+        let playable_card_count = CardCount::new(0); 
+        let selected_card = player.set_card_to_play(&playable_card_count);
+
+        assert_eq!(selected_card, card::Card::Rock);
+        assert_eq!(player.cards.len(), 3);
+    }
 }
