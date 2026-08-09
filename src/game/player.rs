@@ -41,9 +41,9 @@ impl Player {
     }
 
     pub fn set_card_to_play(&mut self, returned_cards: &CardCount ) -> card::Card{
-        assert!(self.cards.is_empty() == false);
+        assert!(!self.cards.is_empty());
         
-        return self.strategy.choose_card(&mut self.cards, returned_cards);
+        self.strategy.choose_card(&mut self.cards, returned_cards)
     }
 
     pub fn win_duel(&mut self) {
@@ -53,7 +53,7 @@ impl Player {
     pub fn lose_duel(&mut self) -> Vec<card::Card> {
         self.star -= 1;
 
-        if self.star <= 0 {
+        if self.star == 0 {
             return mem::take(&mut self.cards);
         }
 

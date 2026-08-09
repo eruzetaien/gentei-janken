@@ -9,6 +9,12 @@ pub struct Game {
     is_playing: bool,
 }
 
+impl Default for Game {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Game {
    pub fn new () -> Game {
         Game{
@@ -57,8 +63,8 @@ impl Game {
             let player2 = waiting_players.pop().unwrap();
 
             let duel = duel::Duel {
-                player1: player1,
-                player2: player2,
+                player1,
+                player2,
             }; 
             let result = duel.play(&playable_card_count);
             
@@ -81,7 +87,7 @@ impl Game {
         }
         println!("\nGame finished!");
 
-        println!("");
+        println!();
         println!("Winners: {}", winners.len());
         for player in &winners {
             println!("  - {:?} ({} stars)", player.name, player.star);

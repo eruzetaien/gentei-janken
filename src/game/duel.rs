@@ -49,7 +49,7 @@ impl Duel {
         DuelResult {
             player1: self.player1, 
             player2: self.player2, 
-            returned_cards: returned_cards
+            returned_cards
         }
     }
 }
