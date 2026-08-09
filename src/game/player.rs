@@ -11,19 +11,32 @@ pub trait PlayStrategy {
     ) -> card::Card;
 }
 
+#[derive(Debug, Clone, Copy)]
 pub struct RandomStrategy;
+
+#[derive(Debug, Clone, Copy)]
 pub struct BalancedStrategy;
+
+#[derive(Debug, Clone, Copy)]
 pub struct ProbabilityStrategy;
 
 
 pub struct Player {
     pub name: String,
+    pub strategy: Box<dyn PlayStrategy>,
     pub star: usize,
     pub cards: Vec<card::Card>,
-    pub strategy: Box<dyn PlayStrategy>,
 }
 
 impl Player {
+    pub fn new(name: String, strategy: Box<dyn PlayStrategy>) -> Player {
+        Player {
+            name,
+            strategy, 
+            star: 0,
+            cards: Vec::new(),
+        }
+    }
     pub fn init(&mut self, star: usize, cards: Vec<card::Card>) {
         self.star = star;
         self.cards = cards;

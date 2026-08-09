@@ -1,0 +1,18 @@
+{
+    "random": [
+        "RAN-1",
+        "RAN-2",
+        "RAN-3"
+    ],
+    "balanced": [
+        "BAL-1",
+        "BAL-2",
+        "BAL-3"
+    ],
+    "probability": [
+        "PROB-1",
+        "PROB-2",
+        "PROB-3",
+        "PROB-4"
+    ]
+}

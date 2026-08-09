@@ -23,6 +23,11 @@ impl Game {
             is_playing: false,
         }
     }
+    pub fn add_players(&mut self, mut players: Vec<player::Player>) {
+        if self.is_playing {return;}
+
+        self.players.append(&mut players);
+    }
     pub fn add_player(&mut self, player: player::Player) {
         if self.is_playing {return;}
 
@@ -84,7 +89,7 @@ impl Game {
             for player in [result.player1, result.player2] {
                 if !player.cards.is_empty() && player.star > 0 {
                     waiting_players.push_back(player);
-                } else if player.star > target_star {
+                } else if player.star >= target_star {
                     println!( "{:?} win with star: {:?}",
                         &player.name,
                         &player.star,
