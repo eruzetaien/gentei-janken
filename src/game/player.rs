@@ -48,6 +48,10 @@ impl Player {
 
         vec![] 
     }
+
+    pub fn take_remaining_cards(&mut self) -> Vec<card::Card> {
+        mem::take(&mut self.cards)
+    }
 }
 
 impl PlayStrategy for RandomStrategy {
@@ -69,31 +73,36 @@ impl PlayStrategy for BalancedStrategy {
         _returned_cards: &CardCount
     ) -> card::Card 
     {
-        let mut rock_count_idx = (0, 0);
-        let mut paper_count_idx = (0, 0);
-        let mut scissors_count_idx = (0,0);
+        let mut choices = [
+            (0,None), // rock (count, index)
+            (0,None), // paper (count, index)
+            (0,None), // scissors (count, index)
+        ];
 
         for (idx, card) in cards.iter().enumerate() {
             match *card {
                 card::Card::Rock => {
-                    rock_count_idx.0 += 1;
-                    rock_count_idx.1 = idx;
+                    choices[0].0 += 1;
+                    choices[0].1 = Some(idx);
                 },
                 card::Card::Paper => {
-                    paper_count_idx.0 += 1;
-                    paper_count_idx.1 = idx;
+                    choices[1].0 += 1;
+                    choices[1].1 = Some(idx);
                 },
                 card::Card::Scissors => {
-                    scissors_count_idx.0 += 1;
-                    scissors_count_idx.1 = idx;
+                    choices[2].0 += 1;
+                    choices[2].1 = Some(idx);
                 },
             }
         }
 
-        let choices = [
-            rock_count_idx, paper_count_idx, scissors_count_idx
-        ];
-        
+        let choices: Vec<(usize, usize)> = choices
+            .into_iter()
+            .filter_map(|(count,opt_idx)| {
+                opt_idx.map(|index| (count, index)) // map filter None
+            })
+            .collect();
+
         let max_count = choices
             .iter()
             .map(|(count,_)| *count)
@@ -109,6 +118,45 @@ impl PlayStrategy for BalancedStrategy {
         let chosen_index = chosen.1; 
 
         cards.remove(chosen_index)
+    }
+}
+
+impl PlayStrategy for ProbabilityStrategy {
+    fn choose_card(
+        &self,
+        cards: &mut Vec<card::Card>,
+        playable_card_count: &CardCount
+    ) -> card::Card {
+        let mut choices: Vec<(usize, usize)> = Vec::new(); 
+
+        if let Some(idx) = cards.iter().position(|x| *x == card::Card::Rock) {
+            choices.push((playable_card_count.rock, idx));
+        }
+
+        if let Some(idx) = cards.iter().position(|x| *x == card::Card::Paper) {
+            choices.push((playable_card_count.paper, idx));
+        }
+
+        if let Some(idx) = cards.iter().position(|x| *x == card::Card::Scissors) {
+            choices.push((playable_card_count.scissors, idx));
+        }
+        
+        let min_count = choices
+            .iter()
+            .map(|(count,_)| *count)
+            .min()
+            .unwrap_or(0);
+
+        let candidates: Vec<_> = choices
+            .iter()
+            .filter(|(count, _)| *count == min_count)
+            .collect();
+
+        let chosen = candidates[rand::random_range(0..candidates.len())];
+        let chosen_index = chosen.1; 
+
+        cards.remove(chosen_index)
+
     }
 }
 
@@ -182,5 +230,29 @@ mod test {
 
         assert_eq!(selected_card, card::Card::Rock);
         assert_eq!(player.cards.len(), 3);
+    }
+
+    #[test]
+    fn probability_strategy_works() {
+        let mut player = Player {
+            name: "player1".to_string(),
+            star: 0,
+            cards: vec![
+                card::Card::Rock,
+                card::Card::Paper,
+                card::Card::Scissors,
+            ],
+            strategy: Box::new(ProbabilityStrategy),
+        };
+
+        let mut playable_card_count = CardCount::new(0);  
+        playable_card_count.rock = 1; 
+        playable_card_count.paper = 2; 
+        playable_card_count.scissors = 2; 
+
+        let selected_card = player.set_card_to_play(&playable_card_count);
+
+        assert_eq!(selected_card, card::Card::Rock);
+        assert_eq!(player.cards.len(), 2);
     }
 }

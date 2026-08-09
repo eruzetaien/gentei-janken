@@ -18,8 +18,24 @@ fn main() {
         strategy: Box::new(player::RandomStrategy),
     };
 
-   game.add_player(player1); 
-   game.add_player(player2); 
+    let player3 = player::Player{
+        name: "player3".to_string(),
+        star: 0,
+        cards: Vec::new(),
+        strategy: Box::new(player::ProbabilityStrategy),
+    };
+    
+    let player4 = player::Player{
+        name: "player4".to_string(),
+        star: 0,
+        cards: Vec::new(),
+        strategy: Box::new(player::RandomStrategy),
+    };
+
+    game.add_player(player1); 
+    game.add_player(player2); 
+    game.add_player(player3); 
+    game.add_player(player4); 
    
-   game.play();
+    game.play();
 }

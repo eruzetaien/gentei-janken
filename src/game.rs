@@ -1,3 +1,4 @@
+use std::collections::VecDeque;
 use std::mem;
 
 pub mod card;
@@ -50,17 +51,27 @@ impl Game {
         let total_playable_card_per_type = total_card_per_type * self.players.len();
         let mut playable_card_count = CardCount::new(total_playable_card_per_type);
 
-        let mut waiting_players = mem::take(&mut self.players);
+        let mut waiting_players: VecDeque<player::Player> =
+            mem::take(&mut self.players).into();
+
         let mut winners = Vec::new();
         let mut losers = Vec::new();
 
         println!("Game start!");
         while playable_card_count.total() > 0  {
             if waiting_players.len() < 2 {
+                if let Some(mut player) = waiting_players.pop_front() {
+                    println!("There's no player left as an opponent for {:?}",
+                        &player.name);
+                    let remaining_cards = player.take_remaining_cards();
+                    playable_card_count.remove(remaining_cards);
+
+                    losers.push(player);
+                }
                 break;
             } 
-            let player1 = waiting_players.pop().unwrap();
-            let player2 = waiting_players.pop().unwrap();
+            let player1 = waiting_players.pop_front().unwrap();
+            let player2 = waiting_players.pop_front().unwrap();
 
             let duel = duel::Duel {
                 player1,
@@ -72,7 +83,7 @@ impl Game {
             
             for player in [result.player1, result.player2] {
                 if !player.cards.is_empty() && player.star > 0 {
-                    waiting_players.push(player);
+                    waiting_players.push_back(player);
                 } else if player.star > target_star {
                     println!( "{:?} win with star: {:?}",
                         &player.name,
@@ -118,16 +129,6 @@ impl CardCount {
 
     fn total(&self) -> usize {
         self.rock + self.paper + self.scissors
-    }
-
-    pub fn add(&mut self, cards: Vec<card::Card>) {
-        for card in cards {
-            match card {
-                card::Card::Rock => self.rock += 1,
-                card::Card::Paper => self.paper += 1,
-                card::Card::Scissors => self.scissors += 1,
-            }
-        }
     }
 
     pub fn remove(&mut self, cards: Vec<card::Card>) {
