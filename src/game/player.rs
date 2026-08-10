@@ -1,4 +1,4 @@
-use std::mem;
+use std::{mem, thread, time};
 
 use super::card; 
 use super::CardCount;
@@ -41,7 +41,10 @@ impl Player {
 
     pub fn set_card_to_play(&mut self, returned_cards: &CardCount ) -> card::Card{
         assert!(!self.cards.is_empty());
-        
+       
+        let think_time = rand::random_range(0..3);
+        thread::sleep(time::Duration::from_secs(think_time));
+
         self.strategy.choose_card(&mut self.cards, returned_cards)
     }
 
