@@ -12,7 +12,9 @@
     "probability": [
         "PROB-1",
         "PROB-2",
-        "PROB-3",
-        "PROB-4"
+        "PROB-3"
+    ],
+    "metarandom": [
+        "META-1"
     ]
 }

@@ -5,7 +5,8 @@ use gentei_janken::game::player::{
     Player,
     RandomStrategy,
     BalancedStrategy,
-    ProbabilityStrategy
+    ProbabilityStrategy,
+    MetaRandomStrategy,
 };
 
 type PlayerCategory = HashMap<String, Vec<String>>;
@@ -21,24 +22,27 @@ fn load_players_from_json(path: &str) -> Vec<Player> {
     for (strategy_name, player_names) in player_category {
         match strategy_name.as_str() {
             "random" => {
-                let strategy = Box::new(RandomStrategy);
-
                 for name in player_names {
-                    players.push(Player::new(name,strategy.clone()));
+                    let strategy = Box::new(RandomStrategy);
+                    players.push(Player::new(name,strategy));
                 }
             },
             "balanced" => {
-                let strategy = Box::new(BalancedStrategy);
-
                 for name in player_names {
-                    players.push(Player::new(name,strategy.clone()));
+                    let strategy = Box::new(BalancedStrategy);
+                    players.push(Player::new(name,strategy));
                 }
             },
             "probability" => {
-                let strategy = Box::new(ProbabilityStrategy);
-
                 for name in player_names {
-                    players.push(Player::new(name,strategy.clone()));
+                    let strategy = Box::new(ProbabilityStrategy);
+                    players.push(Player::new(name,strategy));
+                }
+            },
+            "metarandom" => {
+                for name in player_names {
+                    let strategy = Box::new(MetaRandomStrategy::new());
+                    players.push(Player::new(name,strategy));
                 }
             },
             _ => {

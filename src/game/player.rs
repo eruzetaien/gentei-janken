@@ -7,19 +7,16 @@ pub trait PlayStrategy {
     fn choose_card(
         &self,
         cards: &mut Vec<card::Card>,
-        returned_cards: &CardCount
+        playable_card_count: &CardCount
     ) -> card::Card;
 }
 
-#[derive(Debug, Clone, Copy)]
 pub struct RandomStrategy;
-
-#[derive(Debug, Clone, Copy)]
 pub struct BalancedStrategy;
-
-#[derive(Debug, Clone, Copy)]
 pub struct ProbabilityStrategy;
-
+pub struct MetaRandomStrategy {
+    strategies: [Box<dyn PlayStrategy>; 3],
+}
 
 pub struct Player {
     pub name: String,
@@ -71,7 +68,7 @@ impl PlayStrategy for RandomStrategy {
     fn choose_card(
         &self,
         cards: &mut Vec<card::Card>,
-        _returned_cards: &CardCount
+        _playable_card_count: &CardCount
     ) -> card::Card 
     {
         let rand_index = rand::random_range(0..cards.len()); 
@@ -83,7 +80,7 @@ impl PlayStrategy for BalancedStrategy {
     fn choose_card(
         &self,
         cards: &mut Vec<card::Card>,
-        _returned_cards: &CardCount
+        _playable_card_count: &CardCount
     ) -> card::Card 
     {
         let mut choices = [
@@ -170,6 +167,35 @@ impl PlayStrategy for ProbabilityStrategy {
 
         cards.remove(chosen_index)
 
+    }
+}
+
+impl Default for MetaRandomStrategy {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl MetaRandomStrategy {
+    pub fn new() -> MetaRandomStrategy {
+        MetaRandomStrategy {
+            strategies: [
+                Box::new(RandomStrategy) as Box<dyn PlayStrategy>,
+                Box::new(BalancedStrategy) as Box<dyn PlayStrategy>,
+                Box::new(ProbabilityStrategy) as Box<dyn PlayStrategy>,
+            ]
+        }
+    }
+}
+
+impl PlayStrategy for MetaRandomStrategy {
+    fn choose_card(
+        &self,
+        cards: &mut Vec<card::Card>,
+        playable_card_count: &CardCount
+    ) -> card::Card {
+        let rand_index = rand::random_range(0..self.strategies.len()); 
+        self.strategies[rand_index].choose_card(cards, playable_card_count)
     }
 }
 
