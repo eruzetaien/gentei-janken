@@ -38,6 +38,7 @@ impl Game {
         let star = 3;
         let target_star = 5;
         let total_card_per_type = 4;
+        let total_player = self.players.len();
         
         println!("Init players");
         for player in &mut self.players {
@@ -51,9 +52,9 @@ impl Game {
             player.init(star, initial_cards);
         }
         self.is_playing = true;
-
+        
         // Loop until all cards are played
-        let total_playable_card_per_type = total_card_per_type * self.players.len();
+        let total_playable_card_per_type = total_card_per_type * total_player;
         let mut playable_card_count = CardCount::new(total_playable_card_per_type);
 
         let mut waiting_players: VecDeque<player::Player> =
@@ -103,17 +104,21 @@ impl Game {
         }
         println!("\nGame finished!");
 
+        let mut total_player_star = 0;
         println!();
         println!("Winners: {}", winners.len());
         for player in &winners {
+            total_player_star += player.star;
             println!("  - {:?} ({} stars)", player.name, player.star);
         }
 
         println!("Losers: {}", losers.len());
         for player in &losers {
+            total_player_star += player.star;
             println!("  - {:?} ({} stars)", player.name, player.star);
         }
 
+        assert_eq!(total_player_star, total_player * star);
     }
 
 }
