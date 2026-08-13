@@ -1,17 +1,16 @@
-use std::{ collections::VecDeque, mem, thread};
-use std::sync::{ Arc, RwLock};
-use std::sync::mpsc::{channel, Sender, Receiver, TryRecvError};
+use std::{
+    collections::VecDeque,
+    mem,
+    thread,
+    sync::{ Arc, RwLock, mpsc::{channel, TryRecvError}},
+};
 
 pub mod card;
 pub mod player;
 pub mod duel;
 
-use card::{Card};
-use player::{Player};
-use duel::{Duel, DuelResult};
-
 pub struct Game {
-    players: Vec<Player>,
+    players: Vec<player::Player>,
     is_playing: bool,
 }
 
@@ -28,12 +27,12 @@ impl Game {
             is_playing: false,
         }
     }
-    pub fn add_players(&mut self, mut players: Vec<Player>) {
+    pub fn add_players(&mut self, mut players: Vec<player::Player>) {
         if self.is_playing {return;}
 
         self.players.append(&mut players);
     }
-    pub fn add_player(&mut self, player: Player) {
+    pub fn add_player(&mut self, player: player::Player) {
         if self.is_playing {return;}
 
         self.players.push(player);
@@ -49,9 +48,9 @@ impl Game {
         for player in &mut self.players {
             let mut initial_cards = Vec::new();
             for _ in 0..total_player_card_per_type {
-                initial_cards.push(Card::Rock);
-                initial_cards.push(Card::Paper);
-                initial_cards.push(Card::Scissors);
+                initial_cards.push(card::Card::Rock);
+                initial_cards.push(card::Card::Paper);
+                initial_cards.push(card::Card::Scissors);
             }
 
             player.init(star, initial_cards);
@@ -60,29 +59,55 @@ impl Game {
         
         // Loop until all cards are played
         let total_card_per_type = total_player_card_per_type * total_player;
-        let playable_card_count = 
+        let mut playable_card_count = 
             Arc::new(RwLock::new(CardCount::new(total_card_per_type)));
 
-        let mut waiting_players: VecDeque<Player> =
+        let mut waiting_players: VecDeque<player::Player> =
             mem::take(&mut self.players).into();
 
         let mut winners = Vec::new();
         let mut losers = Vec::new();
 
         println!("Game start!");
-        let max_duel = 4;
-        let mut total_duel = 0;
+        let max_playing_player = 4;
+        let mut total_playing_player = 0;
 
-        let (tx, rx): (Sender<DuelResult>, Receiver<DuelResult>) = channel();
+        let (tx, rx) = channel();
         
-        while playable_card_count.read().unwrap().total() > 0  { 
+        while playable_card_count.total() > 0  {
+            if total_playing_player == max_playing_player {
+                continue;
+            }
 
+            if waiting_players.len() < 2 && total_playing_player == 0 {
+                if let Some(mut player) = waiting_players.pop_front() {
+                    println!("There's no player left as an opponent for {:?}",
+                        &player.name);
+                    let remaining_cards = player.take_remaining_cards();
+                    playable_card_count.remove(remaining_cards);
+
+                    losers.push(player);
+                }
+                break;
+            } 
+            let player1 = waiting_players.pop_front().unwrap();
+            let player2 = waiting_players.pop_front().unwrap();
+
+            let tx_clone = tx.clone();
+            let card_count = Arc::clone(&playable_card_count);
+            thread::spawn(move || {
+                let duel = duel::Duel {
+                    player1,
+                    player2,
+                }; 
+
+                let duel_result = duel.play(&card_count);
+                tx_clone.send(duel_result);
+            });
+            
             match rx.try_recv() {
                 Ok(duel_result) => {
-                    total_duel -= 1;
-                    playable_card_count.write().unwrap()
-                        .remove(duel_result.returned_cards);
-
+                    playable_card_count.remove(duel_result.returned_cards);
                     for player in [duel_result.player1, duel_result.player2] {
                         if !player.cards.is_empty() && player.star > 0 {
                             waiting_players.push_back(player);
@@ -105,41 +130,7 @@ impl Game {
 
                 }
             }
-
-            if waiting_players.len() < 2 {
-                if total_duel > 0 {
-                    continue;
-                }
-
-                if let Some(mut player) = waiting_players.pop_front() {
-                    println!("There's no player left as an opponent for {:?}",
-                        &player.name);
-                    let remaining_cards = player.take_remaining_cards();
-                    playable_card_count.write().unwrap().remove(remaining_cards);
-
-                    losers.push(player);
-                }
-                break;
-            }
-
-            if total_duel < max_duel {
-                let player1 = waiting_players.pop_front().unwrap();
-                let player2 = waiting_players.pop_front().unwrap();
-                total_duel += 1;
-
-                let tx_clone = tx.clone();
-                let card_count = Arc::clone(&playable_card_count);
-                thread::spawn(move || {
-                    let duel = Duel {
-                        player1,
-                        player2,
-                    }; 
-
-                    let duel_result = duel.play(&card_count.read().unwrap());
-                    tx_clone.send(duel_result)
-                        .expect("failed to send duel result");
-                });
-            }
+            
 
         }
         println!("\nGame finished!");
@@ -181,12 +172,12 @@ impl CardCount {
         self.rock + self.paper + self.scissors
     }
 
-    pub fn remove(&mut self, cards: Vec<Card>) {
+    pub fn remove(&mut self, cards: Vec<card::Card>) {
         for card in cards {
             match card {
-                Card::Rock => self.rock -= 1,
-                Card::Paper => self.paper -= 1,
-                Card::Scissors => self.scissors -= 1,
+                card::Card::Rock => self.rock -= 1,
+                card::Card::Paper => self.paper -= 1,
+                card::Card::Scissors => self.scissors -= 1,
             }
         }
     }
@@ -203,7 +194,7 @@ mod tests {
             is_playing: false,
         };
 
-        let new_player = Player{
+        let new_player = player::Player{
             name: "player1".to_string(),
             star: 0,
             cards: Vec::new(),

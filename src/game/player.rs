@@ -15,18 +15,18 @@ pub struct RandomStrategy;
 pub struct BalancedStrategy;
 pub struct ProbabilityStrategy;
 pub struct MetaRandomStrategy {
-    strategies: [Box<dyn PlayStrategy>; 3],
+    strategies: [Box<dyn PlayStrategy + Send>; 3],
 }
 
 pub struct Player {
     pub name: String,
-    pub strategy: Box<dyn PlayStrategy>,
+    pub strategy: Box<dyn PlayStrategy + Send>,
     pub star: usize,
     pub cards: Vec<card::Card>,
 }
 
 impl Player {
-    pub fn new(name: String, strategy: Box<dyn PlayStrategy>) -> Player {
+    pub fn new(name: String, strategy: Box<dyn PlayStrategy + Send>) -> Player {
         Player {
             name,
             strategy, 
@@ -183,9 +183,9 @@ impl MetaRandomStrategy {
     pub fn new() -> MetaRandomStrategy {
         MetaRandomStrategy {
             strategies: [
-                Box::new(RandomStrategy) as Box<dyn PlayStrategy>,
-                Box::new(BalancedStrategy) as Box<dyn PlayStrategy>,
-                Box::new(ProbabilityStrategy) as Box<dyn PlayStrategy>,
+                Box::new(RandomStrategy) as Box<dyn PlayStrategy + Send>,
+                Box::new(BalancedStrategy) as Box<dyn PlayStrategy + Send>,
+                Box::new(ProbabilityStrategy) as Box<dyn PlayStrategy + Send>,
             ]
         }
     }
