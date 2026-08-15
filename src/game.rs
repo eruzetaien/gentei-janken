@@ -1,4 +1,4 @@
-use std::{ collections::VecDeque, mem, thread};
+use std::{ collections::VecDeque, mem};
 use std::sync::{ Arc, RwLock};
 use std::sync::mpsc::{channel, Sender, Receiver, TryRecvError};
 
@@ -7,8 +7,16 @@ pub mod player;
 pub mod duel;
 
 use card::{Card};
-use player::{Player};
+pub use player::{
+    Player,
+    RandomStrategy,
+    BalancedStrategy,
+    ProbabilityStrategy,
+    MetaRandomStrategy,
+
+};
 use duel::{Duel, DuelResult};
+use crate::thread_pool::ThreadPool;
 
 pub struct Game {
     players: Vec<Player>,
@@ -39,7 +47,7 @@ impl Game {
         self.players.push(player);
     }
 
-    pub fn play(mut self) {
+    pub fn play(mut self, pool: &ThreadPool) {
         let star = 3;
         let target_star = 5;
         let total_player_card_per_type = 4;
@@ -70,7 +78,6 @@ impl Game {
         let mut losers = Vec::new();
 
         println!("Game start!");
-        let max_duel = 4;
         let mut total_duel = 0;
 
         let (tx, rx): (Sender<DuelResult>, Receiver<DuelResult>) = channel();
@@ -122,24 +129,22 @@ impl Game {
                 break;
             }
 
-            if total_duel < max_duel {
-                let player1 = waiting_players.pop_front().unwrap();
-                let player2 = waiting_players.pop_front().unwrap();
-                total_duel += 1;
+            let player1 = waiting_players.pop_front().unwrap();
+            let player2 = waiting_players.pop_front().unwrap();
+            total_duel += 1;
 
-                let tx_clone = tx.clone();
-                let card_count = Arc::clone(&playable_card_count);
-                thread::spawn(move || {
-                    let duel = Duel {
-                        player1,
-                        player2,
-                    }; 
+            let tx_clone = tx.clone();
+            let card_count = Arc::clone(&playable_card_count);
+            pool.execute(move || {
+                let duel = Duel {
+                    player1,
+                    player2,
+                }; 
 
-                    let duel_result = duel.play(&card_count.read().unwrap());
-                    tx_clone.send(duel_result)
-                        .expect("failed to send duel result");
-                });
-            }
+                let duel_result = duel.play(&card_count.read().unwrap());
+                tx_clone.send(duel_result)
+                    .expect("failed to send duel result");
+            });
 
         }
         println!("\nGame finished!");

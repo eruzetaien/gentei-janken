@@ -1,7 +1,8 @@
 use std::collections::HashMap;
 use std::fs;
+use gentei_janken::thread_pool::ThreadPool;
 use gentei_janken::game;
-use gentei_janken::game::player::{
+use gentei_janken::game::{
     Player,
     RandomStrategy,
     BalancedStrategy,
@@ -59,5 +60,7 @@ fn main() {
     let players = load_players_from_json("data/players.json");
 
     game.add_players(players);
-    game.play();
+
+    let pool = ThreadPool::new(4);
+    game.play(&pool);
 }
