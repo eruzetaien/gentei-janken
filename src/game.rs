@@ -1,6 +1,5 @@
 use std::{ collections::VecDeque, mem};
-use std::sync::{ Arc, RwLock};
-use std::sync::mpsc::{channel, Sender, Receiver, TryRecvError};
+//use std::sync::mpsc::{channel, Sender, Receiver, TryRecvError};
 
 pub mod card;
 pub mod player;
@@ -9,14 +8,19 @@ pub mod duel;
 use card::{Card};
 pub use player::{
     Player,
-    RandomStrategy,
-    BalancedStrategy,
-    ProbabilityStrategy,
-    MetaRandomStrategy,
+    PlayStrategy,
+    PlayStrategy::RandomStrategy,
+    PlayStrategy::BalancedStrategy,
+    PlayStrategy::ProbabilityStrategy,
+    PlayStrategy::MetaRandomStrategy,
 
 };
-use duel::{Duel, DuelResult};
-use crate::thread_pool::ThreadPool;
+use duel::{Duel, DuelStatus};
+
+pub enum Availability<T> {
+    Available(T),
+    Waiting,
+}
 
 pub struct Game {
     players: Vec<Player>,
@@ -47,7 +51,7 @@ impl Game {
         self.players.push(player);
     }
 
-    pub fn play(mut self, pool: &ThreadPool) {
+    pub fn play(mut self) {
         let star = 3;
         let target_star = 5;
         let total_player_card_per_type = 4;
@@ -68,8 +72,7 @@ impl Game {
         
         // Loop until all cards are played
         let total_card_per_type = total_player_card_per_type * total_player;
-        let playable_card_count = 
-            Arc::new(RwLock::new(CardCount::new(total_card_per_type)));
+        let mut playable_card_count = CardCount::new(total_card_per_type);
 
         let mut waiting_players: VecDeque<Player> =
             mem::take(&mut self.players).into();
@@ -78,74 +81,61 @@ impl Game {
         let mut losers = Vec::new();
 
         println!("Game start!");
-        let mut total_duel = 0;
-
-        let (tx, rx): (Sender<DuelResult>, Receiver<DuelResult>) = channel();
+        let mut ongoing_duels: Vec<Duel> = Vec::new();
         
-        while playable_card_count.read().unwrap().total() > 0  { 
+        while playable_card_count.total() > 0  { 
 
-            match rx.try_recv() {
-                Ok(duel_result) => {
-                    total_duel -= 1;
-                    playable_card_count.write().unwrap()
-                        .remove(duel_result.returned_cards);
+            let mut remaining_duels = Vec::new();
+            for duel in ongoing_duels.drain(..) {
+                match duel.play(&playable_card_count) {
+                    DuelStatus::Waiting(duel) => remaining_duels.push(duel),
+                    DuelStatus::Finished(duel_result) => {
+                        playable_card_count.remove(duel_result.returned_cards);
 
-                    for player in [duel_result.player1, duel_result.player2] {
-                        if !player.cards.is_empty() && player.star > 0 {
-                            waiting_players.push_back(player);
-                        } else if player.star >= target_star {
-                            println!( "{:?} win with star: {:?}",
-                                &player.name,
-                                &player.star,
-                            );
-                            winners.push(player);
-                        } else {
-                            println!( "{:?} lose", &player.name);
-                            losers.push(player);
-                        }
+                        for player in [duel_result.player1, duel_result.player2] {
+                            if !player.cards.is_empty() && player.star > 0 {
+                                waiting_players.push_back(player);
+                            } else if player.star >= target_star {
+                                println!( "{:?} win with star: {:?}",
+                                    &player.name,
+                                    &player.star,
+                                );
+                                winners.push(player);
+                            } else {
+                                println!( "{:?} lose", &player.name);
+                                losers.push(player);
+                            }
+                        }    
                     }
-                },
-                Err(TryRecvError::Empty) => {
-
-                },
-                Err(TryRecvError::Disconnected) => {
-
                 }
             }
+            ongoing_duels = remaining_duels;
 
-            if waiting_players.len() < 2 {
-                if total_duel > 0 {
-                    continue;
-                }
+            // Create new duel if possible
+            if waiting_players.len() >= 2 {
+                let player1 = waiting_players.pop_front().unwrap();
+                let player2 = waiting_players.pop_front().unwrap();
 
+                ongoing_duels.push(Duel {
+                    player1,
+                    player2,
+                });
+
+                continue;
+            }
+
+            // No players available to create another duel.
+            if ongoing_duels.is_empty() {
                 if let Some(mut player) = waiting_players.pop_front() {
                     println!("There's no player left as an opponent for {:?}",
                         &player.name);
                     let remaining_cards = player.take_remaining_cards();
-                    playable_card_count.write().unwrap().remove(remaining_cards);
+                    playable_card_count.remove(remaining_cards);
 
                     losers.push(player);
                 }
-                break;
+                break; 
             }
-
-            let player1 = waiting_players.pop_front().unwrap();
-            let player2 = waiting_players.pop_front().unwrap();
-            total_duel += 1;
-
-            let tx_clone = tx.clone();
-            let card_count = Arc::clone(&playable_card_count);
-            pool.execute(move || {
-                let duel = Duel {
-                    player1,
-                    player2,
-                }; 
-
-                let duel_result = duel.play(&card_count.read().unwrap());
-                tx_clone.send(duel_result)
-                    .expect("failed to send duel result");
-            });
-
         }
         println!("\nGame finished!");
 
@@ -208,12 +198,11 @@ mod tests {
             is_playing: false,
         };
 
-        let new_player = Player{
-            name: "player1".to_string(),
-            star: 0,
-            cards: Vec::new(),
-            strategy: Box::new(player::RandomStrategy{}),
-        };
+        let new_player = Player::new(
+            "player1".to_string(),
+            RandomStrategy,
+            None
+        );
 
         not_starting_game.add_player(new_player);
         

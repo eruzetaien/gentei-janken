@@ -1,22 +1,34 @@
 use super::card; 
-use super::player; 
+use super::player::Player;
 use super::CardCount;
+use super::Availability::Available;
 
 pub struct Duel {
-    pub player1: player::Player,
-    pub player2: player::Player,
+    pub player1: Player,
+    pub player2: Player,
 }
 
-pub struct DuelResult{
-    pub player1: player::Player,
-    pub player2: player::Player,
+pub struct DuelResult {
+    pub player1: Player,
+    pub player2: Player,
     pub returned_cards: Vec<card::Card>,
 } 
 
+pub enum DuelStatus {
+   Waiting(Duel),
+   Finished(DuelResult)
+}
+
 impl Duel {
-    pub fn play(mut self, playable_card_count: &CardCount) -> DuelResult {
-        let player1_card = self.player1.set_card_to_play(playable_card_count);
-        let player2_card = self.player2.set_card_to_play(playable_card_count);
+    pub fn play(mut self, playable_card_count: &CardCount) -> DuelStatus {
+        let player1_card = self.player1.try_choose_card(playable_card_count);
+        let player2_card = self.player2.try_choose_card(playable_card_count);
+
+        let (Available(player1_card), Available(player2_card)) = 
+            (player1_card, player2_card)
+        else {
+            return DuelStatus::Waiting(self);
+        };
 
         let player1_result = player1_card.play_against(&player2_card);
 
@@ -46,44 +58,53 @@ impl Duel {
             card::PlayResult::Draw => {}
         }
         
-        DuelResult {
-            player1: self.player1, 
-            player2: self.player2, 
-            returned_cards
-        }
+        DuelStatus::Finished(
+            DuelResult { 
+                player1: self.player1,
+                player2: self.player2,
+                returned_cards
+        })
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::game::player::PlayStrategy;
 
     #[test]
     fn play_works() {
-        let winner = player::Player {
+        let winner = Player {
             name: "player1".to_string(),
             star: 1,
             cards: vec![card::Card::Paper],
-            strategy: Box::new(player::RandomStrategy), 
+            strategy: PlayStrategy::RandomStrategy, 
+            card_tx: None,
         };
 
-        let loser = player::Player {
+        let loser = Player {
             name: "player2".to_string(),
             star: 1,
             cards: vec![
                 card::Card::Rock,
                 card::Card::Rock
             ],
-            strategy: Box::new(player::RandomStrategy), 
+            strategy: PlayStrategy::RandomStrategy, 
+            card_tx: None,
         };
 
-        let duel = Duel {
+        let mut duel = Duel {
             player1: winner,
             player2: loser,
         };
         
         let playable_card_count = CardCount::new(0); 
-        let result = duel.play(&playable_card_count);
+        let result = loop {
+            match duel.play(&playable_card_count){
+                DuelStatus::Finished(duel_result) => break duel_result,
+                DuelStatus::Waiting(ongoing_duel) => duel = ongoing_duel
+            }
+        };
 
         assert_eq!(result.player1.star, 2);
         assert_eq!(result.player2.star, 0);

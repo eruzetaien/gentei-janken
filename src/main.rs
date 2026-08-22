@@ -1,13 +1,13 @@
 use std::collections::HashMap;
 use std::fs;
-use gentei_janken::thread_pool::ThreadPool;
+//use gentei_janken::thread_pool::ThreadPool;
 use gentei_janken::game;
 use gentei_janken::game::{
     Player,
+    PlayStrategy,
     RandomStrategy,
     BalancedStrategy,
     ProbabilityStrategy,
-    MetaRandomStrategy,
 };
 
 type PlayerCategory = HashMap<String, Vec<String>>;
@@ -24,26 +24,26 @@ fn load_players_from_json(path: &str) -> Vec<Player> {
         match strategy_name.as_str() {
             "random" => {
                 for name in player_names {
-                    let strategy = Box::new(RandomStrategy);
-                    players.push(Player::new(name,strategy));
+                    let strategy = RandomStrategy;
+                    players.push(Player::new(name,strategy,None));
                 }
             },
             "balanced" => {
                 for name in player_names {
-                    let strategy = Box::new(BalancedStrategy);
-                    players.push(Player::new(name,strategy));
+                    let strategy = BalancedStrategy;
+                    players.push(Player::new(name,strategy,None));
                 }
             },
             "probability" => {
                 for name in player_names {
-                    let strategy = Box::new(ProbabilityStrategy);
-                    players.push(Player::new(name,strategy));
+                    let strategy = ProbabilityStrategy;
+                    players.push(Player::new(name,strategy,None));
                 }
             },
             "metarandom" => {
                 for name in player_names {
-                    let strategy = Box::new(MetaRandomStrategy::new());
-                    players.push(Player::new(name,strategy));
+                    let strategy = PlayStrategy::meta_random();
+                    players.push(Player::new(name,strategy,None));
                 }
             },
             _ => {
@@ -61,6 +61,6 @@ fn main() {
 
     game.add_players(players);
 
-    let pool = ThreadPool::new(4);
-    game.play(&pool);
+    //let pool = ThreadPool::new(4);
+    game.play();
 }
