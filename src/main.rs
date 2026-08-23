@@ -1,66 +1,65 @@
-use std::collections::HashMap;
-use std::fs;
-//use gentei_janken::thread_pool::ThreadPool;
-use gentei_janken::game;
-use gentei_janken::game::{
-    Player,
-    PlayStrategy,
-    RandomStrategy,
-    BalancedStrategy,
-    ProbabilityStrategy,
-};
+use std::io;
+use std::thread;
 
-type PlayerCategory = HashMap<String, Vec<String>>;
+mod thread_pool;
 
-fn load_players_from_json(path: &str) -> Vec<Player> {
-    let file_content = fs::read_to_string(path).expect("Failed to read file");
+// use thread_pool::ThreadPool;
+// use gentei_janken::game;
+use gentei_janken::network::Host;
+use gentei_janken::network::Client;
+// use gentei_janken::game::{
+//     Player,
+//     PlayStrategy,
+//     RandomStrategy,
+//     BalancedStrategy,
+//     ProbabilityStrategy,
+// };
 
-    let player_category: PlayerCategory = serde_json::from_str(&file_content).
-        expect("Failed to parse JSON");
 
-    let mut players = Vec::new();
-    
-    for (strategy_name, player_names) in player_category {
-        match strategy_name.as_str() {
-            "random" => {
-                for name in player_names {
-                    let strategy = RandomStrategy;
-                    players.push(Player::new(name,strategy,None));
-                }
-            },
-            "balanced" => {
-                for name in player_names {
-                    let strategy = BalancedStrategy;
-                    players.push(Player::new(name,strategy,None));
-                }
-            },
-            "probability" => {
-                for name in player_names {
-                    let strategy = ProbabilityStrategy;
-                    players.push(Player::new(name,strategy,None));
-                }
-            },
-            "metarandom" => {
-                for name in player_names {
-                    let strategy = PlayStrategy::meta_random();
-                    players.push(Player::new(name,strategy,None));
-                }
-            },
-            _ => {
-                eprintln!("Unknown strategy '{}'", strategy_name);
-                continue;
-            }
-        };
-    }
-    players
-}
+
 
 fn main() {
-    let mut game = game::Game::new(); 
-    let players = load_players_from_json("data/players.json");
 
-    game.add_players(players);
+    println!("Please input player name.");
+    let mut player_name = String::new();
 
-    //let pool = ThreadPool::new(4);
-    game.play();
+    io::stdin()
+        .read_line(&mut player_name)
+        .expect("Failed to read player name");
+
+    let player_name = player_name.trim().to_string();
+
+    println!("Host IP (leave empty to host):");
+    let mut host_ip = String::new();
+
+    io::stdin()
+        .read_line(&mut host_ip)
+        .expect("Failed to read host IP");
+
+    let mut host_ip = host_ip.trim();
+
+    // let pool = ThreadPool::new(4);
+    if host_ip.is_empty() {
+        println!("Starting as host...");
+        let (ready_tx, ready_rx) = std::sync::mpsc::channel();
+
+        thread::spawn(move || {
+            Host::start(ready_tx).expect("Failed to run host");
+        });
+
+        // Wait until the host tells us it's ready
+        ready_rx
+            .recv()
+            .expect("Host thread stopped before becoming ready");
+
+        host_ip = "127.0.0.1";
+    }     
+
+    println!("Starting client...");
+
+    Client::start(
+        host_ip.parse().expect("Invalid host IP addres")
+    ).expect("Failed to run client"); 
 }
+
+

@@ -17,6 +17,58 @@ pub enum PlayStrategy {
     }
 }
 
+pub struct Player {
+    pub id: usize,
+    pub name: String,
+    pub strategy: PlayStrategy,
+    pub star: usize,
+    pub cards: Vec<Card>,
+}
+
+impl Player {
+    pub fn new(
+        id: usize,
+        name: String, 
+        strategy: PlayStrategy,
+    ) -> Player {
+        Player {
+            id,
+            name,
+            strategy, 
+            star: 0,
+            cards: Vec::new(),
+        }
+    }
+    pub fn init(&mut self, star: usize, cards: Vec<Card>) {
+        self.star = star;
+        self.cards = cards;
+    }
+
+    pub fn try_choose_card(&mut self, returned_cards: &CardCount ) -> Availability<Card>{
+        assert!(!self.cards.is_empty());
+       
+        self.strategy.choose_card(&mut self.cards, returned_cards)
+    }
+
+    pub fn win_duel(&mut self) {
+        self.star += 1;
+    }
+
+    pub fn lose_duel(&mut self) -> Vec<Card> {
+        self.star -= 1;
+
+        if self.star == 0 {
+            return mem::take(&mut self.cards);
+        }
+
+        vec![] 
+    }
+
+    pub fn take_remaining_cards(&mut self) -> Vec<Card> {
+        mem::take(&mut self.cards)
+    }
+}
+
 impl PlayStrategy {
     pub fn meta_random() -> Self {
         Self::MetaRandomStrategy {
@@ -132,64 +184,15 @@ impl PlayStrategy {
                             .map_or( Waiting, |idx| Available(cards.remove(idx)))
                     },
                     Err(TryRecvError::Empty) => Waiting,
-                    Err(TryRecvError::Disconnected) => {panic!("Online strategy input channel disconnected");}
+                    Err(TryRecvError::Disconnected) => {
+                        panic!("Online strategy input channel disconnected");
+                    }
                 }
             }
         }
     }
 } 
 
-pub struct Player {
-    pub name: String,
-    pub strategy: PlayStrategy,
-    pub star: usize,
-    pub cards: Vec<Card>,
-    pub card_tx: Option<Sender<Card>>, // for online player 
-}
-
-impl Player {
-    pub fn new(
-        name: String, 
-        strategy: PlayStrategy,
-        card_tx: Option<Sender<Card>>,
-    ) -> Player {
-        Player {
-            name,
-            strategy, 
-            star: 0,
-            cards: Vec::new(),
-            card_tx, 
-        }
-    }
-    pub fn init(&mut self, star: usize, cards: Vec<Card>) {
-        self.star = star;
-        self.cards = cards;
-    }
-
-    pub fn try_choose_card(&mut self, returned_cards: &CardCount ) -> Availability<Card>{
-        assert!(!self.cards.is_empty());
-       
-        self.strategy.choose_card(&mut self.cards, returned_cards)
-    }
-
-    pub fn win_duel(&mut self) {
-        self.star += 1;
-    }
-
-    pub fn lose_duel(&mut self) -> Vec<Card> {
-        self.star -= 1;
-
-        if self.star == 0 {
-            return mem::take(&mut self.cards);
-        }
-
-        vec![] 
-    }
-
-    pub fn take_remaining_cards(&mut self) -> Vec<Card> {
-        mem::take(&mut self.cards)
-    }
-}
 
 #[cfg(test)]
 mod test {
@@ -198,11 +201,11 @@ mod test {
     #[test]
     fn init_works() {
         let mut player = Player{
+            id: 1,
             name: "player1".to_string(),
             star: 0,
             cards: Vec::new(),
             strategy: PlayStrategy::RandomStrategy,
-            card_tx: None,
         };
 
         let star = 3;
@@ -227,6 +230,7 @@ mod test {
     #[test]
     fn random_strategy_works() {
         let mut player = Player {
+            id: 1,
             name: "player1".to_string(),
             star: 0,
             cards: vec![
@@ -235,7 +239,6 @@ mod test {
                 Card::Scissors,
             ],
             strategy: PlayStrategy::RandomStrategy,
-            card_tx: None,
         };
 
         let playable_card_count = CardCount::new(0); 
@@ -250,6 +253,7 @@ mod test {
     #[test]
     fn balanced_strategy_works() {
         let mut player = Player {
+            id: 1,
             name: "player1".to_string(),
             star: 0,
             cards: vec![
@@ -259,7 +263,6 @@ mod test {
                 Card::Scissors,
             ],
             strategy: PlayStrategy::BalancedStrategy,
-            card_tx: None,
         };
 
         let playable_card_count = CardCount::new(0); 
@@ -276,6 +279,7 @@ mod test {
     #[test]
     fn probability_strategy_works() {
         let mut player = Player {
+            id: 1,
             name: "player1".to_string(),
             star: 0,
             cards: vec![
@@ -284,7 +288,6 @@ mod test {
                 Card::Scissors,
             ],
             strategy: PlayStrategy::ProbabilityStrategy,
-            card_tx: None,
         };
 
         let mut playable_card_count = CardCount::new(0);  

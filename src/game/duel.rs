@@ -75,14 +75,15 @@ mod tests {
     #[test]
     fn play_works() {
         let winner = Player {
+            id: 1,
             name: "player1".to_string(),
             star: 1,
             cards: vec![card::Card::Paper],
             strategy: PlayStrategy::RandomStrategy, 
-            card_tx: None,
         };
 
         let loser = Player {
+            id: 2,
             name: "player2".to_string(),
             star: 1,
             cards: vec![
@@ -90,7 +91,6 @@ mod tests {
                 card::Card::Rock
             ],
             strategy: PlayStrategy::RandomStrategy, 
-            card_tx: None,
         };
 
         let mut duel = Duel {

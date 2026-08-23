@@ -5,7 +5,7 @@ pub mod card;
 pub mod player;
 pub mod duel;
 
-use card::{Card};
+pub use card::{Card};
 pub use player::{
     Player,
     PlayStrategy,
@@ -49,6 +49,14 @@ impl Game {
         if self.is_playing {return;}
 
         self.players.push(player);
+    }
+
+    pub fn remove_player(&mut self, player_id: usize) {
+        if self.is_playing {
+            return;
+        }
+
+        self.players.retain(|player| {player.id != player_id})
     }
 
     pub fn play(mut self) {
@@ -199,9 +207,9 @@ mod tests {
         };
 
         let new_player = Player::new(
+            1,
             "player1".to_string(),
             RandomStrategy,
-            None
         );
 
         not_starting_game.add_player(new_player);
@@ -209,4 +217,3 @@ mod tests {
         assert!(not_starting_game.players.len() == 1);
     }
 }
-
