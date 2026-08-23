@@ -58,7 +58,8 @@ fn main() {
     println!("Starting client...");
 
     Client::start(
-        host_ip.parse().expect("Invalid host IP addres")
+        host_ip.parse().expect("Invalid host IP addres"),
+        player_name,
     ).expect("Failed to run client"); 
 }
 

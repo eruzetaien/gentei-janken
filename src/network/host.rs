@@ -9,7 +9,7 @@ use std::sync::mpsc::Sender;
 use crate::player_loader::load_players_from_json;
 use crate::game::Game;
 use crate::constant::HOST_PORT;
-
+use crate::network::{ClientMessage, HostMessage, encode, decode};
 pub struct Host {
 }
 
@@ -35,6 +35,13 @@ impl Host {
         loop {
             let (size, addr) = socket.recv_from(&mut buf)?;
             println!("Received {size} bytes from {addr}");
+            let client_msg: ClientMessage = decode(&buf[..size]);
+
+            match client_msg {
+                ClientMessage::Join {player_name} => {
+                    println!("Player {player_name} wants to join: {addr}");
+                }
+            }
         }
     }
 }
