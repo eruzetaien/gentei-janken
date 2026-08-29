@@ -13,14 +13,9 @@ pub use player::{
     PlayStrategy::BalancedStrategy,
     PlayStrategy::ProbabilityStrategy,
     PlayStrategy::MetaRandomStrategy,
-
+    PlayStrategy::OnlineStrategy,
 };
 use duel::{Duel, DuelStatus};
-
-pub enum Availability<T> {
-    Available(T),
-    Waiting,
-}
 
 pub struct Game {
     players: Vec<Player>,
@@ -34,7 +29,7 @@ impl Default for Game {
 }
 
 impl Game {
-   pub fn new () -> Game {
+    pub fn new () -> Game {
         Game{
             players: Vec::new(),
             is_playing: false,
@@ -164,13 +159,43 @@ impl Game {
         assert_eq!(total_player_star, total_player * star);
     }
 
+    pub fn game_state(&self) -> GameState {
+        if self.is_playing {
+            return GameState::Waiting {player_names: Vec::new()}
+        }
+        GameState::Waiting { 
+            player_names: self.players.iter().map(|x| x.name.clone()).collect()
+        }
+    }
+
+    pub fn player_state(&self) -> &str {
+        if self.is_playing { "the game is on"}
+        else {"Waiting for players..."}
+    }
 }
 
+pub enum Availability<T> {
+    Available(T),
+    Waiting,
+}
+
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
+pub enum GameState {
+    Waiting{player_names: Vec<String>},
+    Playing{playable_card_count: CardCount}, 
+}
+pub enum PlayerState {
+    Idle,
+    Playing{playable_card_count: CardCount}
+}
+
+#[derive(Debug, Copy, Clone, serde::Serialize, serde::Deserialize)]
 pub struct CardCount {
     pub rock: usize,
     pub paper: usize,
     pub scissors: usize,
 }
+
 impl CardCount {
     fn new(initial_count: usize) -> CardCount {
         CardCount{

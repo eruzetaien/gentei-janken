@@ -44,7 +44,8 @@ fn main() {
         let (ready_tx, ready_rx) = std::sync::mpsc::channel();
 
         thread::spawn(move || {
-            Host::start(ready_tx).expect("Failed to run host");
+            let mut player_host = Host::new();
+            player_host.start(ready_tx).expect("Failed to run host");
         });
 
         // Wait until the host tells us it's ready
@@ -57,10 +58,12 @@ fn main() {
 
     println!("Starting client...");
 
-    Client::start(
+    let mut player_client = Client::new();
+    player_client.start(
         host_ip.parse().expect("Invalid host IP addres"),
         player_name,
-    ).expect("Failed to run client"); 
+
+    ).expect("Failed to run client");
 }
 
 

@@ -1,6 +1,7 @@
 use serde::ser;
 use serde::de;
 
+use crate::game::GameState;
 
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
 pub enum ClientMessage {
@@ -8,7 +9,9 @@ pub enum ClientMessage {
 }
 
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
-pub enum HostMessage {}
+pub enum HostMessage {
+    Update {game_state: GameState}
+}
 
 
 pub fn encode<T: ser::Serialize>(message: &T) -> Vec<u8> {
