@@ -1,13 +1,16 @@
 use std::time::Instant;
 
 use super::card; 
-use super::player::Player;
+use super::Player;
+use super::RandomStrategy;
 use super::CardCount;
-use super::Availability::Available;
+use super::Availability::{self, Available, Waiting};
 
 pub struct Duel {
     pub player1: Player,
     pub player2: Player,
+    pub player1_card: Availability<card::Card>,
+    pub player2_card: Availability<card::Card>,
     pub timeout_at: Instant,
 }
 
@@ -15,6 +18,8 @@ pub struct DuelResult {
     pub player1: Player,
     pub player2: Player,
     pub returned_cards: Vec<card::Card>,
+    pub player1_card: Availability<card::Card>,
+    pub player2_card: Availability<card::Card>,
 } 
 
 pub enum DuelStatus {
@@ -23,17 +28,64 @@ pub enum DuelStatus {
 }
 
 impl Duel {
+    pub fn new(player1: Player, player2: Player, timeout_at: Instant) -> Duel {
+        Duel {
+            player1,
+            player2,
+            player1_card: Waiting,
+            player2_card: Waiting,
+            timeout_at,
+        }
+    }
+    
     pub fn play(mut self, playable_card_count: &CardCount) -> DuelStatus {
-        let player1_card = self.player1.try_choose_card(playable_card_count);
-        let player2_card = self.player2.try_choose_card(playable_card_count);
+        if let Waiting = self.player1_card {
+            self.player1_card = self.player1.try_choose_card(playable_card_count);
+        }
+
+        if let Waiting = self.player2_card {
+            self.player2_card = self.player1.try_choose_card(playable_card_count);
+        }
+
 
         let (Available(player1_card), Available(player2_card)) = 
-            (player1_card, player2_card)
+            (&self.player1_card, &self.player2_card)
         else {
+            if Instant::now() > self.timeout_at {
+                if let Waiting = self.player1_card {
+                    let player_strategy = self.player1.strategy;
+                    self.player1.strategy = RandomStrategy;
+                    self.player1_card = self.player1.
+                        try_choose_card(playable_card_count);
+                    self.player1.strategy = player_strategy;
+                }
+
+                if let Waiting = self.player2_card {
+                    let player_strategy = self.player2.strategy;
+                    self.player2.strategy = RandomStrategy;
+                    self.player2_card = self.player2
+                        .try_choose_card(playable_card_count);
+                    self.player2.strategy = player_strategy;
+                }
+
+                // Recheck AFTER RandomStrategy
+                let (Available(player1_card), Available(player2_card)) =
+                    (&self.player1_card, &self.player2_card)
+                else {
+                    return DuelStatus::Finished(
+                        DuelResult { 
+                            player1: self.player1,
+                            player2: self.player2,
+                            player1_card: self.player1_card,
+                            player2_card: self.player2_card,
+                            returned_cards: Vec::new(),
+                    })
+                };
+            }
             return DuelStatus::Waiting(self);
         };
 
-        let player1_result = player1_card.play_against(&player2_card);
+        let player1_result = player1_card.play_against(player2_card);
 
         println!(
             "Duel: {:?} played {:?} vs {:?} played {:?} -> {:?}",
@@ -44,7 +96,7 @@ impl Duel {
             player1_result
         );
 
-        let mut returned_cards = vec![player1_card, player2_card];
+        let mut returned_cards = vec![(*player1_card).clone(), (*player2_card).clone()];
         match player1_result {
             card::PlayResult::Win => {
                 self.player1.win_duel();
@@ -65,6 +117,8 @@ impl Duel {
             DuelResult { 
                 player1: self.player1,
                 player2: self.player2,
+                player1_card: self.player1_card,
+                player2_card: self.player2_card,
                 returned_cards
         })
     }
@@ -97,11 +151,11 @@ mod tests {
             strategy: PlayStrategy::RandomStrategy, 
         };
 
-        let mut duel = Duel {
-            player1: winner,
-            player2: loser,
-            timeout_at: Instant::now() + Duration::from_secs(5),
-        };
+        let mut duel = Duel::new(
+            winner,
+            loser,
+            Instant::now() + Duration::from_secs(5),
+        );
         
         let playable_card_count = CardCount::new(0); 
         let result = loop {

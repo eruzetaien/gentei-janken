@@ -197,11 +197,8 @@ impl Game {
                     let player2 = self.waiting_players.pop_front().unwrap();
 
                     let duel_duration = Duration::from_secs(20);
-                    self.ongoing_duels.push(Duel {
-                        player1,
-                        player2,
-                        timeout_at: Instant::now() + duel_duration,
-                    });
+                    let timeout_at = Instant::now() + duel_duration;
+                    self.ongoing_duels.push(Duel::new(player1, player2, timeout_at));
 
                     let game_state = GameState::Playing{
                         remaining_players: self.get_remaining_player_infos(),
@@ -241,13 +238,13 @@ impl Game {
                     playable_card_count: self.playable_card_count,
                 };
                 let player_updates = self.get_in_game_player_updates();
-                return (game_state, player_updates);
+                (game_state, player_updates)
             },
 
             GameStatus::Finished => {
                 let game_state = GameState::Finished {winners: self.winners.clone()};
                 let player_updates = self.get_in_game_player_updates();
-                return (game_state, player_updates);
+                return (game_state, player_updates)
             },
         }
     }

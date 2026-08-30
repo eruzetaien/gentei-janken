@@ -177,16 +177,19 @@ impl PlayStrategy {
             }
 
             PlayStrategy::OnlineStrategy { card_rx: input_card } => {
-                match input_card.try_recv() {
-                    Ok(chosen_card) => {
+                let mut chosen_card = None;
+
+                while let Ok(card) = input_card.try_recv() {
+                    chosen_card = Some(card);
+                }
+
+                match chosen_card {
+                    Some(card) => {
                         cards.iter()
-                            .position(|cards| *cards == chosen_card)
-                            .map_or( Waiting, |idx| Available(cards.remove(idx)))
-                    },
-                    Err(TryRecvError::Empty) => Waiting,
-                    Err(TryRecvError::Disconnected) => {
-                        panic!("Online strategy input channel disconnected");
+                            .position(|c| *c == card)
+                            .map_or(Waiting, |idx| Available(cards.remove(idx)))
                     }
+                    None => Waiting,
                 }
             }
         }

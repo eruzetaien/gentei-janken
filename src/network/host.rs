@@ -177,7 +177,7 @@ impl Host {
                     let bot_count = cmp::max(max_players - total_online_player, 0);
                     self.game.add_bots(bot_count);
 
-                    //self.game.start();
+                    self.game.start();
                 }
             },
            ClientMessage::Disconnect => {
