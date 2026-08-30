@@ -68,7 +68,7 @@ impl Client {
                     }
                     KeyResult::Submitted(input) => {
                        if let ClientState::InRoom(is_ready) = self.state {
-                           let is_ready = match input.as_str() {
+                           let is_ready = match input.to_lowercase().as_str() {
                                "y" => true,
                                "n" => false,
                                _ => is_ready,
@@ -97,7 +97,7 @@ impl Client {
 
     fn handle_message(&mut self, message: HostMessage) -> io::Result<()>{
         match message {
-            HostMessage::Update {game_state} => {
+            HostMessage::Update {game_state, player_state} => {
                 match game_state {
                     GameState::Waiting {player_infos} => {
                         let mut players_display = Vec::new(); 
@@ -122,9 +122,22 @@ impl Client {
                         self.term_ui.set_top_title("Room")?;
                         self.term_ui.set_top_subtitle("Waiting for players...")?;
                         self.term_ui.set_players_l(&players_title, &players_display)?;
+
+                        self.term_ui.set_instruction(
+                            "Ready: [Y] Yes, [N] No"
+                        )?;
                     },
-                    GameState::Playing {playable_card_count} => {
+
+                    GameState::Playing {
+                        remaining_players,
+                        winners,
+                        playable_card_count
+                    } => {
                         println!("{:?}", playable_card_count);
+                    },
+                    
+                    GameState::Finished {winners} => {
+                        todo!();
                     }
                 }
             }

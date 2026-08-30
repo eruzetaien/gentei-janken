@@ -1,7 +1,7 @@
 use serde::ser;
 use serde::de;
 
-use crate::game::GameState;
+use crate::game::{GameState,PlayerState};
 
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
 pub enum ClientMessage {
@@ -12,7 +12,10 @@ pub enum ClientMessage {
 
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
 pub enum HostMessage {
-    Update {game_state: GameState}
+    Update {
+        game_state: GameState,
+        player_state: PlayerState,
+    }
 }
 
 

@@ -1,3 +1,5 @@
+use std::time::Instant;
+
 use super::card; 
 use super::player::Player;
 use super::CardCount;
@@ -6,6 +8,7 @@ use super::Availability::Available;
 pub struct Duel {
     pub player1: Player,
     pub player2: Player,
+    pub timeout_at: Instant,
 }
 
 pub struct DuelResult {
@@ -71,6 +74,7 @@ impl Duel {
 mod tests {
     use super::*;
     use crate::game::player::PlayStrategy;
+    use std::time::Duration;
 
     #[test]
     fn play_works() {
@@ -96,6 +100,7 @@ mod tests {
         let mut duel = Duel {
             player1: winner,
             player2: loser,
+            timeout_at: Instant::now() + Duration::from_secs(5),
         };
         
         let playable_card_count = CardCount::new(0); 

@@ -1,3 +1,4 @@
+use std::cmp;
 use std::collections::HashMap;
 use std::io;
 use std::net::{
@@ -5,7 +6,8 @@ use std::net::{
     SocketAddr,
     UdpSocket,
 };
-use std::sync::{Arc, RwLock};
+use std::cell::RefCell;
+use std::rc::Rc;
 use std::sync::mpsc::{Receiver, Sender, channel};
 use std::time::{Duration, Instant};
 
@@ -24,8 +26,8 @@ use crate::network::{
 
 pub struct Host {
     game: Game,
-    connection_by_id: HashMap<usize, Arc<RwLock<PlayerConnection>>>,
-    connection_by_addr: HashMap<SocketAddr, Arc<RwLock<PlayerConnection>>>,
+    connection_by_id: HashMap<usize, Rc<RefCell<PlayerConnection>>>,
+    connection_by_addr: HashMap<SocketAddr, Rc<RefCell<PlayerConnection>>>,
     next_player_id: usize,
 }
 
@@ -89,14 +91,14 @@ impl Host {
             
             let now = Instant::now();
             if now >= next_tick {
-                let mut game_state = self.game.game_state();
+                let (mut game_state, mut player_updates) = self.game.update();
                 if let GameState::Waiting{player_infos} = game_state {
                     let mut online_player_infos = Vec::new();
                     for mut player_info in player_infos {
-                        if let Some(player_conn_lock) = self.connection_by_id
+                        if let Some(player_conn_ref) = self.connection_by_id
                             .get(&player_info.id) 
                         {
-                            let player_conn = player_conn_lock.read().unwrap();
+                            let player_conn = player_conn_ref.borrow();
                             let mut status = 0; // not ready
                             if let ClientState::InRoom(is_ready) = player_conn.state {
                                 if is_ready {status = 1}
@@ -111,26 +113,35 @@ impl Host {
                     }
                 }
                 
-                // send to all client
-                for player_conn_lock in self.connection_by_id.values() {
-                    let player_conn = player_conn_lock.read().unwrap();
+                // send to all client (todo: use async)
+                for player_conn_ref in self.connection_by_id.values() { 
+                    let player_conn = player_conn_ref.borrow();
 
-                    let mut clone_state = game_state.clone();  
-                    if let GameState::Waiting{player_infos} = &mut clone_state {
-                        for player_info in player_infos {
-                            if player_info.id == player_conn.id {
-                                player_info.id = 1; // client = player (todo: refactor)
-                            } else {
-                                player_info.id = 0;
+                    if let Some(index) = player_updates.iter()
+                        .position(|x| x.id == player_conn.id)
+                    {
+                        let player_state = player_updates.remove(index).state;
+                        
+                        let mut clone_state = game_state.clone(); 
+                        if let GameState::Waiting{player_infos} = &mut clone_state {
+                            for player_info in player_infos {
+                                if player_info.id == player_conn.id {
+                                    player_info.id = 1; // client = player (todo)
+                                } else {
+                                    player_info.id = 0;
+                                }
                             }
                         }
-                    }
-                    let update_msg = HostMessage::Update {
-                        game_state: clone_state 
-                    }; 
-                    socket.send_to(&encode(&update_msg), player_conn.addr)?;
-                }
 
+                        let update_msg = HostMessage::Update {
+                            game_state: clone_state, player_state 
+                        }; 
+                        socket.send_to(&encode(&update_msg), player_conn.addr)?;
+                    } else {
+                        panic!("Player connection has no corresponding player update");
+                    }
+                }
+                    
                 next_tick += tick_rate;
             }            
         }
@@ -142,8 +153,8 @@ impl Host {
                 self.player_join(player_name, addr);
             },
             ClientMessage::SetReady(is_ready) => {
-                if let Some(player_conn_lock) = self.connection_by_addr.get(&addr) {
-                    let mut player_conn = player_conn_lock.write().unwrap();
+                if let Some(player_conn_ref) = self.connection_by_addr.get(&addr) {
+                    let mut player_conn = player_conn_ref.borrow_mut();
                     
                     match player_conn.state {
                         ClientState::InRoom(_ready) => {
@@ -151,10 +162,27 @@ impl Host {
                         } 
                     }
                 }
+                let mut all_player_ready = true;
+                for player_conn_ref in self.connection_by_addr.values(){
+                    let player_conn = player_conn_ref.borrow();
+                    if matches!(player_conn.state, ClientState::InRoom(false)) {
+                        all_player_ready = false;
+                        break;
+                    }
+                }
+
+                if all_player_ready {
+                    let max_players = 20;
+                    let total_online_player = self.connection_by_addr.len();
+                    let bot_count = cmp::max(max_players - total_online_player, 0);
+                    self.game.add_bots(bot_count);
+
+                    //self.game.start();
+                }
             },
-            ClientMessage::Disconnect => {
-                if let Some(player_conn_lock) = self.connection_by_addr.get(&addr) {
-                    let player_conn = player_conn_lock.read().unwrap();    
+           ClientMessage::Disconnect => {
+                if let Some(player_conn_ref) = self.connection_by_addr.get(&addr) {
+                    let player_conn = player_conn_ref.borrow(); 
                     self.game.remove_player(player_conn.id);
                     self.connection_by_id.remove(&player_conn.id);
                 }
@@ -174,7 +202,7 @@ impl Host {
         let (card_tx, card_rx) = channel();
 
         // Create player connection
-        let new_player_conn = Arc::new(RwLock::new(PlayerConnection {
+        let new_player_conn = Rc::new(RefCell::new(PlayerConnection {
             id, addr, card_tx, 
             state: ClientState::InRoom(false),
         }));

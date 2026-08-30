@@ -144,6 +144,17 @@ impl TermUi {
         self.write_region_line(&self.subtitle, 0, text)
     }
 
+    pub fn set_bot_title(&mut self, text: &str) -> io::Result<()> {
+        self.write_region_line(&self.title2, 0, text)
+    }
+
+    pub fn set_bot_subtitle(&mut self, text: &str) -> io::Result<()> {
+        self.write_region_line(&self.subtitle2, 0, text)
+    }
+
+    pub fn set_instruction(&mut self, text: &str) -> io::Result<()> {
+        self.write_region_line(&self.instruction, 0, text)
+    }
     // ─── Generic region writer ───────────────────────────────────
 
     /// Write a line within a multi-line region (row offset from region top).
