@@ -4,7 +4,7 @@ pub mod protocol;
 pub mod player_connection;
 
 pub use host::Host;
-pub use client::Client;
+pub use client::{Client, ClientState};
 pub use protocol::{
     ClientMessage,
     HostMessage,

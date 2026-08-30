@@ -20,6 +20,7 @@ use duel::{Duel, DuelStatus};
 pub struct Game {
     players: Vec<Player>,
     is_playing: bool,
+    playable_card_count: CardCount,
 }
 
 impl Default for Game {
@@ -33,6 +34,7 @@ impl Game {
         Game{
             players: Vec::new(),
             is_playing: false,
+            playable_card_count: CardCount::new(0)
         }
     }
     pub fn add_players(&mut self, mut players: Vec<Player>) {
@@ -75,7 +77,7 @@ impl Game {
         
         // Loop until all cards are played
         let total_card_per_type = total_player_card_per_type * total_player;
-        let mut playable_card_count = CardCount::new(total_card_per_type);
+        self.playable_card_count.reset(total_card_per_type);
 
         let mut waiting_players: VecDeque<Player> =
             mem::take(&mut self.players).into();
@@ -86,14 +88,14 @@ impl Game {
         println!("Game start!");
         let mut ongoing_duels: Vec<Duel> = Vec::new();
         
-        while playable_card_count.total() > 0  { 
+        while self.playable_card_count.total() > 0  { 
 
             let mut remaining_duels = Vec::new();
             for duel in ongoing_duels.drain(..) {
-                match duel.play(&playable_card_count) {
+                match duel.play(&self.playable_card_count) {
                     DuelStatus::Waiting(duel) => remaining_duels.push(duel),
                     DuelStatus::Finished(duel_result) => {
-                        playable_card_count.remove(duel_result.returned_cards);
+                        self.playable_card_count.remove(duel_result.returned_cards);
 
                         for player in [duel_result.player1, duel_result.player2] {
                             if !player.cards.is_empty() && player.star > 0 {
@@ -133,7 +135,7 @@ impl Game {
                     println!("There's no player left as an opponent for {:?}",
                         &player.name);
                     let remaining_cards = player.take_remaining_cards();
-                    playable_card_count.remove(remaining_cards);
+                    self.playable_card_count.remove(remaining_cards);
 
                     losers.push(player);
                 }
@@ -161,11 +163,19 @@ impl Game {
 
     pub fn game_state(&self) -> GameState {
         if self.is_playing {
-            return GameState::Waiting {player_names: Vec::new()}
+            return GameState::Playing { 
+                playable_card_count: self.playable_card_count.clone()
+            }
         }
-        GameState::Waiting { 
-            player_names: self.players.iter().map(|x| x.name.clone()).collect()
-        }
+        let player_infos = self.players
+            .iter()
+            .map(|x| PlayerInfo {
+                id: x.id,
+                name: x.name.clone(),
+                status: String::new(),
+            })
+            .collect();
+        GameState::Waiting { player_infos }
     }
 
     pub fn player_state(&self) -> &str {
@@ -179,11 +189,19 @@ pub enum Availability<T> {
     Waiting,
 }
 
-#[derive(Debug, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct PlayerInfo {
+    pub id: usize,
+    pub name: String,
+    pub status: String,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub enum GameState {
-    Waiting{player_names: Vec<String>},
+    Waiting{player_infos: Vec<PlayerInfo>},
     Playing{playable_card_count: CardCount}, 
 }
+
 pub enum PlayerState {
     Idle,
     Playing{playable_card_count: CardCount}
@@ -203,6 +221,12 @@ impl CardCount {
             paper: initial_count,
             scissors: initial_count,
         }
+    }
+
+    fn reset(&mut self, initial_count: usize) {
+        self.rock = initial_count;
+        self.paper = initial_count;
+        self.scissors = initial_count;
     }
 
     fn total(&self) -> usize {
@@ -229,6 +253,7 @@ mod tests {
         let mut not_starting_game = Game {
             players: Vec::new(),
             is_playing: false,
+            playable_card_count: CardCount::new(0),
         };
 
         let new_player = Player::new(

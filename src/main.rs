@@ -18,7 +18,7 @@ use gentei_janken::network::Client;
 
 
 
-fn main() {
+fn main() -> io::Result<()> {
 
     println!("Please input player name.");
     let mut player_name = String::new();
@@ -58,12 +58,14 @@ fn main() {
 
     println!("Starting client...");
 
-    let mut player_client = Client::new();
+    let mut player_client = Client::new()?;
     player_client.start(
         host_ip.parse().expect("Invalid host IP addres"),
         player_name,
 
     ).expect("Failed to run client");
+
+    Ok(())
 }
 
 

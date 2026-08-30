@@ -6,6 +6,8 @@ use crate::game::GameState;
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
 pub enum ClientMessage {
     Join{player_name: String},
+    SetReady(bool), 
+    Disconnect,
 }
 
 #[derive(Debug, serde::Serialize, serde::Deserialize)]

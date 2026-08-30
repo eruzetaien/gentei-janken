@@ -5,6 +5,7 @@ use std::net::{
     SocketAddr,
     UdpSocket,
 };
+use std::sync::{Arc, RwLock};
 use std::sync::mpsc::{Receiver, Sender, channel};
 use std::time::{Duration, Instant};
 
@@ -17,12 +18,14 @@ use crate::game::{
 use crate::network::{
     PlayerConnection,
     HostMessage, ClientMessage,
+    ClientState,
     encode, decode
 };
 
 pub struct Host {
     game: Game,
-    player_connections: HashMap<usize, PlayerConnection>,
+    connection_by_id: HashMap<usize, Arc<RwLock<PlayerConnection>>>,
+    connection_by_addr: HashMap<SocketAddr, Arc<RwLock<PlayerConnection>>>,
     next_player_id: usize,
 }
 
@@ -36,7 +39,8 @@ impl Host {
     pub fn new() -> Self {
         Self {
             game: Game::new(),
-            player_connections: HashMap::new(),
+            connection_by_id: HashMap::new(),
+            connection_by_addr: HashMap::new(),
             next_player_id: 0,
         }
     } 
@@ -85,9 +89,42 @@ impl Host {
             
             let now = Instant::now();
             if now >= next_tick {
-                for player_conn in self.player_connections.values() {
-                    let game_state = self.game.game_state();
-                    let update_msg = HostMessage::Update {game_state}; 
+                let mut game_state = self.game.game_state();
+                if let GameState::Waiting{player_infos} = game_state {
+                    let mut online_player_infos = Vec::new();
+                    for mut player_info in player_infos {
+                        if let Some(player_conn_lock) = self.connection_by_id
+                            .get(&player_info.id) 
+                        {
+                            let player_conn = player_conn_lock.read().unwrap();
+                            let mut status = "Not Ready";
+                            if let ClientState::InRoom(is_ready) = player_conn.state {
+                                if is_ready {status = "Ready"}
+                            }
+                            player_info.status = status.to_string();
+                            online_player_infos.push(player_info);
+                        } 
+                    }
+
+                    game_state = GameState::Waiting {
+                        player_infos: online_player_infos
+                    }
+                }
+                
+                for player_conn_lock in self.connection_by_id.values() {
+                    let player_conn = player_conn_lock.read().unwrap();
+
+                    let mut clone_state = game_state.clone();  
+                    if let GameState::Waiting{player_infos} = &mut clone_state {
+                        for player_info in player_infos {
+                            if player_info.id == player_conn.id {
+                                player_info.status.push_str(" [You]");
+                            }
+                        }
+                    }
+                    let update_msg = HostMessage::Update {
+                        game_state: clone_state 
+                    }; 
                     socket.send_to(&encode(&update_msg), player_conn.addr)?;
                 }
 
@@ -100,23 +137,46 @@ impl Host {
         match message {
             ClientMessage::Join {player_name} => {
                 self.player_join(player_name, addr);
+            },
+            ClientMessage::SetReady(is_ready) => {
+                if let Some(player_conn_lock) = self.connection_by_addr.get(&addr) {
+                    let mut player_conn = player_conn_lock.write().unwrap();
+                    
+                    match player_conn.state {
+                        ClientState::InRoom(_ready) => {
+                            player_conn.state = ClientState::InRoom(is_ready);
+                        } 
+                    }
+                }
+            },
+            ClientMessage::Disconnect => {
+                if let Some(player_conn_lock) = self.connection_by_addr.get(&addr) {
+                    let player_conn = player_conn_lock.read().unwrap();    
+                    self.game.remove_player(player_conn.id);
+                    self.connection_by_id.remove(&player_conn.id);
+                }
+                
+                self.connection_by_addr.remove(&addr);
             }
         }
     }
 
     fn player_join(&mut self, player_name: String, addr: SocketAddr) {
-        for player_conn in self.player_connections.values() {
-            if player_conn.addr == addr {return;}
+        if self.connection_by_addr.contains_key(&addr) {
+            return;
         }
 
-        println!("{:?} join", player_name);
         let id = self.next_player_id;
         self.next_player_id += 1;
         let (card_tx, card_rx) = channel();
 
         // Create player connection
-        let new_player_conn = PlayerConnection {id, addr, card_tx};
-        self.player_connections.insert(id, new_player_conn);
+        let new_player_conn = Arc::new(RwLock::new(PlayerConnection {
+            id, addr, card_tx, 
+            state: ClientState::InRoom(false),
+        }));
+        self.connection_by_id.insert(id, new_player_conn.clone());
+        self.connection_by_addr.insert(addr, new_player_conn.clone());
 
         // Create player
         let online_strategy = OnlineStrategy {card_rx};

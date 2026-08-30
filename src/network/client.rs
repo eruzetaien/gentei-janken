@@ -8,13 +8,26 @@ use std::net::{
 use crate::constant::{HOST_PORT, CLIENT_PORT};
 use crate::game::{GameState, CardCount};
 use crate::network::{HostMessage, ClientMessage, encode, decode};
+use crate::ui::{TermUi, KeyResult};
+
+pub enum ClientState {
+    InRoom(bool), // ready or not
+}
+
 pub struct Client {
+   term_ui: TermUi,
+   is_quit: bool,
+   state: ClientState, 
 }
 
 impl Client {
-    pub fn new() -> Self {
-        Self {
-        }
+    pub fn new() -> io::Result<Self> {
+        let client = Self {
+            term_ui: TermUi::new()?,
+            is_quit: false,
+            state: ClientState::InRoom(false)
+        };
+        Ok(client)
     } 
 
     pub fn start(&mut self, host_ip: IpAddr, player_name: String) -> io::Result<()> {
@@ -22,19 +35,18 @@ impl Client {
 
         let host_socket = SocketAddr::new(host_ip, HOST_PORT);
         socket.connect(host_socket)?;
-        println!("Client connected");
 
         let join_msg = ClientMessage::Join{player_name};
-        let size = socket.send(&encode(&join_msg))?;
-        println!("Sent {size} bytes");
+        let _size = socket.send(&encode(&join_msg))?;
 
         let mut buf = [0u8; 1024];
-        loop {
+        socket.set_nonblocking(true)?;
+        while !self.is_quit {
             loop {
                 match socket.recv_from(&mut buf) {
                     Ok((size, _addr)) => {
                         let host_msg: HostMessage = decode(&buf[..size]);
-                        self.handle_message(host_msg); 
+                        self.handle_message(host_msg)?; 
                     },
 
                     Err(ref e) if e.kind() == io::ErrorKind::WouldBlock => {
@@ -46,9 +58,32 @@ impl Client {
                 
             }
 
-            let (size, addr) = socket.recv_from(&mut buf)?;
-            println!("Received {size} bytes from {addr}");
+            if let Some(key_result) = self.term_ui.poll_key()? {
+                match key_result {
+                    KeyResult::Exit => {
+                        let msg = ClientMessage::Disconnect;
+                           _ = socket.send(&encode(&msg));
+
+                        self.is_quit = true;
+                    }
+                    KeyResult::Submitted(input) => {
+                       if let ClientState::InRoom(is_ready) = self.state {
+                           let is_ready = match input.as_str() {
+                               "y" => true,
+                               "n" => false,
+                               _ => is_ready,
+                           };
+
+                           let msg = ClientMessage::SetReady(is_ready);
+                           _ = socket.send(&encode(&msg));
+                       }
+                    }
+                }
+            };
         }
+
+        self.term_ui.restore()?;
+        Ok(())
     }
 
     fn bind_socket(&self) -> io::Result<UdpSocket>{
@@ -60,12 +95,12 @@ impl Client {
     }
 
 
-    fn handle_message(&mut self, message: HostMessage) {
+    fn handle_message(&mut self, message: HostMessage) -> io::Result<()>{
         match message {
             HostMessage::Update {game_state} => {
                 match game_state {
-                    GameState::Waiting {player_names} => {
-                        println!("{:?}", player_names);
+                    GameState::Waiting {player_infos} => {
+                        self.term_ui.render_players_l(&player_infos)?;
                     },
                     GameState::Playing {playable_card_count} => {
                         println!("{:?}", playable_card_count);
@@ -73,5 +108,6 @@ impl Client {
                 }
             }
         }
+        Ok(())
     }
 }
