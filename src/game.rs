@@ -172,7 +172,7 @@ impl Game {
             .map(|x| PlayerInfo {
                 id: x.id,
                 name: x.name.clone(),
-                status: String::new(),
+                status: 0,
             })
             .collect();
         GameState::Waiting { player_infos }
@@ -193,7 +193,7 @@ pub enum Availability<T> {
 pub struct PlayerInfo {
     pub id: usize,
     pub name: String,
-    pub status: String,
+    pub status: usize, // can be ready status (1/0), or star status (todo: refactor)
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]

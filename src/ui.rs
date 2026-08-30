@@ -10,7 +10,11 @@ use crossterm::{
     terminal::{self, Clear, ClearType},
 };
 
-use crate::game::PlayerInfo;
+
+pub struct PlayerDisplay {
+    pub name: String,
+    pub status: String,
+}
 
 pub enum KeyResult {
     Submitted(String),
@@ -130,6 +134,14 @@ impl TermUi {
         self.instruction = TermRegion { row: mid_bottom + 4, col: 0, width, height: 1 };
         self.sep4        = sep_row(mid_bottom + 5);
         self.input       = TermRegion { row: height - 1, col: 0, width, height: 1 };
+    }
+
+    pub fn set_top_title(&mut self, text: &str) -> io::Result<()> {
+        self.write_region_line(&self.title, 0, text)
+    }
+
+    pub fn set_top_subtitle(&mut self, text: &str) -> io::Result<()> {
+        self.write_region_line(&self.subtitle, 0, text)
     }
 
     // ─── Generic region writer ───────────────────────────────────
@@ -266,34 +278,42 @@ impl TermUi {
         Ok(())
     }
 
-    pub fn render_players_l(&self, player_infos: &[PlayerInfo]) -> io::Result<()> {
-        self.render_players(&self.players_l, player_infos)
-    }
+    
 
-    pub fn render_players_r(&self, player_infos: &[PlayerInfo]) -> io::Result<()> {
-        self.render_players(&self.players_r, player_infos)
+    pub fn set_players_l(
+        &self,
+        title: &str, 
+        player_infos: &[PlayerDisplay]
+    ) -> io::Result<()> {
+        self.render_players(&self.players_l, title, player_infos)
     }
 
     fn render_players(
         &self,
         region: &TermRegion,
-        player_infos: &[PlayerInfo],
+        title: &str, 
+        player_infos: &[PlayerDisplay]
     ) -> io::Result<()> {
-        // Each player needs:
-        //   1 row -> name
-        //   1 row -> separator (except the last visible player)
-        const PLAYER_HEIGHT: usize = 2;
-
-        let max_players = region.height as usize / PLAYER_HEIGHT;
-        let visible_players = player_infos.iter().take(max_players);
-
         // Clear the entire region first.
         for row in 0..region.height {
             self.write_region_line(region, row, "")?;
         }
 
+        // Title
+        const TITLE_HEIGHT: usize = 2;
+        self.write_region_line(region, 0, title)?;
+        self.write_region_line(region, 1, "")?;
+
+        // Each player needs:
+        //   1 row -> name
+        //   1 row -> separator (except the last visible player)
+        const PLAYER_HEIGHT: usize = 1;
+
+        let max_players = (region.height as usize - TITLE_HEIGHT) / PLAYER_HEIGHT;
+        let visible_players = player_infos.iter().take(max_players);
+               
         for (index, player) in visible_players.enumerate() {
-            let row = index * PLAYER_HEIGHT;
+            let row = TITLE_HEIGHT + (index * PLAYER_HEIGHT);
 
             // Player name-status
             self.write_region_line(
@@ -302,16 +322,16 @@ impl TermUi {
                 &format!("{} - {}",player.name,player.status),
             )?;
 
-            // Separator if another player is below.
-            if index + 1 < max_players && index + 1 < player_infos.len() {
-                let separator = "─".repeat(region.width as usize);
-
-                self.write_region_line(
-                    region,
-                    (row + 1) as u16,
-                    &separator,
-                )?;
-            }
+            // // Separator if another player is below.
+            // if index + 1 < max_players && index + 1 < player_infos.len() {
+            //     let separator = "─".repeat(region.width as usize);
+            //
+            //     self.write_region_line(
+            //         region,
+            //         (row + 1) as u16,
+            //         &separator,
+            //     )?;
+            // }
         }
 
         Ok(())

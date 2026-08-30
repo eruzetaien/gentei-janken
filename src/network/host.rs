@@ -97,11 +97,11 @@ impl Host {
                             .get(&player_info.id) 
                         {
                             let player_conn = player_conn_lock.read().unwrap();
-                            let mut status = "Not Ready";
+                            let mut status = 0; // not ready
                             if let ClientState::InRoom(is_ready) = player_conn.state {
-                                if is_ready {status = "Ready"}
+                                if is_ready {status = 1}
                             }
-                            player_info.status = status.to_string();
+                            player_info.status = status;
                             online_player_infos.push(player_info);
                         } 
                     }
@@ -111,6 +111,7 @@ impl Host {
                     }
                 }
                 
+                // send to all client
                 for player_conn_lock in self.connection_by_id.values() {
                     let player_conn = player_conn_lock.read().unwrap();
 
@@ -118,7 +119,9 @@ impl Host {
                     if let GameState::Waiting{player_infos} = &mut clone_state {
                         for player_info in player_infos {
                             if player_info.id == player_conn.id {
-                                player_info.status.push_str(" [You]");
+                                player_info.id = 1; // client = player (todo: refactor)
+                            } else {
+                                player_info.id = 0;
                             }
                         }
                     }

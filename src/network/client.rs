@@ -8,7 +8,7 @@ use std::net::{
 use crate::constant::{HOST_PORT, CLIENT_PORT};
 use crate::game::{GameState, CardCount};
 use crate::network::{HostMessage, ClientMessage, encode, decode};
-use crate::ui::{TermUi, KeyResult};
+use crate::ui::{TermUi, KeyResult, PlayerDisplay};
 
 pub enum ClientState {
     InRoom(bool), // ready or not
@@ -100,7 +100,28 @@ impl Client {
             HostMessage::Update {game_state} => {
                 match game_state {
                     GameState::Waiting {player_infos} => {
-                        self.term_ui.render_players_l(&player_infos)?;
+                        let mut players_display = Vec::new(); 
+                        let mut ready_count = 0;
+                        for player_info in player_infos {
+                            let mut status = String::new(); 
+                            if player_info.status == 1 {
+                                status.push_str("Ready");
+                                ready_count += 1;
+                            } else {status.push_str("Not Ready");}
+                            
+                            if player_info.id == 1 {status.push_str(" [You]");}
+
+                            players_display.push({ PlayerDisplay {
+                                name: player_info.name, status
+                            }})
+                        }
+
+                        let players_title = format!("Players ({}/{}): ",
+                            ready_count, players_display.len()
+                        );
+                        self.term_ui.set_top_title("Room")?;
+                        self.term_ui.set_top_subtitle("Waiting for players...")?;
+                        self.term_ui.set_players_l(&players_title, &players_display)?;
                     },
                     GameState::Playing {playable_card_count} => {
                         println!("{:?}", playable_card_count);
