@@ -20,6 +20,8 @@ pub struct DuelResult {
     pub returned_cards: Vec<card::Card>,
     pub player1_card: Availability<card::Card>,
     pub player2_card: Availability<card::Card>,
+    pub player1_result: card::PlayResult,
+    pub player2_result: card::PlayResult,
 } 
 
 pub enum DuelStatus {
@@ -47,54 +49,61 @@ impl Duel {
             self.player2_card = self.player1.try_choose_card(playable_card_count);
         }
 
-
-        let (Available(player1_card), Available(player2_card)) = 
-            (&self.player1_card, &self.player2_card)
-        else {
-            if Instant::now() > self.timeout_at {
-                if let Waiting = self.player1_card {
-                    let player_strategy = self.player1.strategy;
-                    self.player1.strategy = RandomStrategy;
-                    self.player1_card = self.player1.
-                        try_choose_card(playable_card_count);
-                    self.player1.strategy = player_strategy;
+        let (player1_card, player2_card) =
+            match (&self.player1_card, &self.player2_card) {
+                (Available(player1_card), Available(player2_card)) => {
+                    (player1_card, player2_card)
                 }
 
-                if let Waiting = self.player2_card {
-                    let player_strategy = self.player2.strategy;
-                    self.player2.strategy = RandomStrategy;
-                    self.player2_card = self.player2
-                        .try_choose_card(playable_card_count);
-                    self.player2.strategy = player_strategy;
+                _ if Instant::now() < self.timeout_at => {
+                    return DuelStatus::Waiting(self);
                 }
 
-                // Recheck AFTER RandomStrategy
-                let (Available(player1_card), Available(player2_card)) =
-                    (&self.player1_card, &self.player2_card)
-                else {
-                    return DuelStatus::Finished(
-                        DuelResult { 
-                            player1: self.player1,
-                            player2: self.player2,
-                            player1_card: self.player1_card,
-                            player2_card: self.player2_card,
-                            returned_cards: Vec::new(),
-                    })
-                };
-            }
-            return DuelStatus::Waiting(self);
-        };
+                _ => {
+                    // Timeout: automatically choose cards for players
+                    if let Waiting = self.player1_card {
+                        let player_strategy = self.player1.strategy;
+                        self.player1.strategy = RandomStrategy;
+
+                        self.player1_card =
+                            self.player1.try_choose_card(playable_card_count);
+
+                        self.player1.strategy = player_strategy;
+                    }
+
+                    if let Waiting = self.player2_card {
+                        let player_strategy = self.player2.strategy;
+                        self.player2.strategy = RandomStrategy;
+
+                        self.player2_card =
+                            self.player2.try_choose_card(playable_card_count);
+
+                        self.player2.strategy = player_strategy;
+                    }
+
+                    // Re-check after RandomStrategy
+                    match (&self.player1_card, &self.player2_card) {
+                        (Available(player1_card), Available(player2_card)) => {
+                            (player1_card, player2_card)
+                        }
+
+                        _ => {
+                            return DuelStatus::Finished(DuelResult {
+                                player1: self.player1,
+                                player2: self.player2,
+                                player1_card: self.player1_card,
+                                player2_card: self.player2_card,
+                                returned_cards: Vec::new(),
+                                player1_result: card::PlayResult::Draw,
+                                player2_result: card::PlayResult::Draw,
+                            });
+                        }
+                    }
+                }
+            };
 
         let player1_result = player1_card.play_against(player2_card);
-
-        println!(
-            "Duel: {:?} played {:?} vs {:?} played {:?} -> {:?}",
-            self.player1.name,
-            player1_card,
-            self.player2.name,
-            player2_card,
-            player1_result
-        );
+        let player2_result = player1_result.for_opponent();
 
         let mut returned_cards = vec![(*player1_card).clone(), (*player2_card).clone()];
         match player1_result {
@@ -119,7 +128,9 @@ impl Duel {
                 player2: self.player2,
                 player1_card: self.player1_card,
                 player2_card: self.player2_card,
-                returned_cards
+                returned_cards,
+                player1_result,
+                player2_result,
         })
     }
 }

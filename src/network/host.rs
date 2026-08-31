@@ -20,7 +20,6 @@ use crate::game::{
 use crate::network::{
     PlayerConnection,
     HostMessage, ClientMessage,
-    ClientState,
     encode, decode
 };
 
@@ -100,8 +99,8 @@ impl Host {
                         {
                             let player_conn = player_conn_ref.borrow();
                             let mut status = 0; // not ready
-                            if let ClientState::InRoom(is_ready) = player_conn.state {
-                                if is_ready {status = 1}
+                            if player_conn.ready_to_start == true {
+                                status = 1;
                             }
                             player_info.status = status;
                             online_player_infos.push(player_info);
@@ -152,20 +151,17 @@ impl Host {
             ClientMessage::Join {player_name} => {
                 self.player_join(player_name, addr);
             },
+
             ClientMessage::SetReady(is_ready) => {
                 if let Some(player_conn_ref) = self.connection_by_addr.get(&addr) {
                     let mut player_conn = player_conn_ref.borrow_mut();
                     
-                    match player_conn.state {
-                        ClientState::InRoom(_ready) => {
-                            player_conn.state = ClientState::InRoom(is_ready);
-                        } 
-                    }
+                    player_conn.ready_to_start = is_ready;
                 }
                 let mut all_player_ready = true;
                 for player_conn_ref in self.connection_by_addr.values(){
                     let player_conn = player_conn_ref.borrow();
-                    if matches!(player_conn.state, ClientState::InRoom(false)) {
+                    if player_conn.ready_to_start == false {
                         all_player_ready = false;
                         break;
                     }
@@ -180,6 +176,7 @@ impl Host {
                     self.game.start();
                 }
             },
+
            ClientMessage::Disconnect => {
                 if let Some(player_conn_ref) = self.connection_by_addr.get(&addr) {
                     let player_conn = player_conn_ref.borrow(); 
@@ -188,7 +185,17 @@ impl Host {
                 }
                 
                 self.connection_by_addr.remove(&addr);
-            }
+            },
+
+            ClientMessage::ReadyForNextDuel => {
+                if let Some(player_conn_ref) = self.connection_by_addr.get(&addr) {
+                    let player_conn = player_conn_ref.borrow(); 
+                    self.game.finish_resting(player_conn.id);
+                }
+            },
+
+            ClientMessage::ChooseCardToPlay => {
+            },
         }
     }
 
@@ -204,7 +211,7 @@ impl Host {
         // Create player connection
         let new_player_conn = Rc::new(RefCell::new(PlayerConnection {
             id, addr, card_tx, 
-            state: ClientState::InRoom(false),
+            ready_to_start: false,
         }));
         self.connection_by_id.insert(id, new_player_conn.clone());
         self.connection_by_addr.insert(addr, new_player_conn.clone());

@@ -299,6 +299,14 @@ impl TermUi {
         self.render_players(&self.players_l, title, player_infos)
     }
 
+    pub fn set_players_r(
+        &self,
+        title: &str, 
+        player_infos: &[PlayerDisplay]
+    ) -> io::Result<()> {
+        self.render_players(&self.players_r, title, player_infos)
+    }
+
     fn render_players(
         &self,
         region: &TermRegion,

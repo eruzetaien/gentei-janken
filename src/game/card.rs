@@ -12,6 +12,24 @@ pub enum PlayResult {
     Draw
 }
 
+impl PlayResult {
+    pub fn description(&self) -> &'static str {
+        match self {
+            PlayResult::Win => "Won",
+            PlayResult::Lose => "Lost",
+            PlayResult::Draw => "Drew",
+        }
+    }
+
+    pub fn for_opponent(&self) -> Self {
+        match self {
+            Self::Win => Self::Lose,
+            Self::Lose => Self::Win,
+            Self::Draw => Self::Draw,
+        }
+    }
+}
+
 impl Card {
     pub fn play_against(&self, other: &Card) -> PlayResult {
         match (self, other) {

@@ -8,6 +8,8 @@ pub enum ClientMessage {
     Join{player_name: String},
     SetReady(bool), 
     Disconnect,
+    ReadyForNextDuel,
+    ChooseCardToPlay,
 }
 
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
