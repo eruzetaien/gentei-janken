@@ -6,6 +6,8 @@ pub mod card;
 pub mod player;
 pub mod duel;
 
+pub use crate::constant::ALL_PLAYER_ID;
+
 pub use card::{Card};
 pub use player::{
     Player,
@@ -26,7 +28,6 @@ pub enum Availability<T> {
 struct RestingPlayer {
     player: Player,
     ready_at: Instant,
-    last_duel_description: String,
 }
 
 enum GameStatus {
@@ -44,6 +45,7 @@ pub struct Game {
     ongoing_duels: Vec<Duel>,
     winners: Vec<PlayerInfo>,
     losers: Vec<PlayerInfo>,
+    player_logs: Vec<PlayerLog>,
 
     target_star: usize,
     duel_duration: Duration,
@@ -67,9 +69,10 @@ impl Game {
             ongoing_duels: Vec::new(),
             winners: Vec::new(),
             losers: Vec::new(),
+            player_logs: Vec::new(),
 
             target_star: 5,
-            duel_duration: Duration::from_secs(5),
+            duel_duration: Duration::from_secs(20),
             rest_duration: Duration::from_secs(10),
         }
     }
@@ -143,7 +146,7 @@ impl Game {
         self.status = GameStatus::Playing;
     }
 
-    pub fn update(&mut self) -> (GameState, Vec<PlayerUpdate>) {
+    pub fn update(&mut self) -> (GameState, Vec<PlayerUpdate>, Vec<PlayerLog>) {
         match self.status {
             GameStatus::Waiting => {
                 let (player_infos, player_updates)
@@ -156,7 +159,7 @@ impl Game {
                                 status: 0,
                             },
                             PlayerUpdate {
-                                id: x.id,
+                                player_id: x.id,
                                 state: PlayerState::Joined,
                             }
                         )
@@ -164,18 +167,18 @@ impl Game {
                     .unzip();
 
                 let game_state = GameState::Waiting { player_infos };
-                (game_state, player_updates)
+                let player_logs = std::mem::take(&mut self.player_logs);
+                (game_state, player_updates, player_logs)
             },
 
             GameStatus::Playing => {
-                let target_star = 5;
-               
                 if self.playable_card_count.total() == 0 {
                     self.status = GameStatus::Finished;
 
                     let game_state = GameState::Finished {winners: self.winners.clone()};
                     let player_updates = self.get_in_game_player_updates();
-                    return (game_state, player_updates);
+                    let player_logs = std::mem::take(&mut self.player_logs);
+                    return (game_state, player_updates, player_logs);
                 } 
                 let mut players_still_resting = Vec::new();
                 for resting_player in self.resting_players.drain(..){
@@ -197,16 +200,25 @@ impl Game {
                                     "Duel cancelled: player was not ready";
                             if duel_result.returned_cards.is_empty() {
                                 // Players not ready
+                                let player1 = duel_result.player1;
+                                let player2 = duel_result.player2;
+
+                                self.player_logs.push( PlayerLog {
+                                    player_id: player1.id,
+                                    message: description.to_string()
+                                });
                                 self.resting_players.push( RestingPlayer {
-                                    player: duel_result.player1,
+                                    player: player1,
                                     ready_at,
-                                    last_duel_description: description.to_string(),
                                 });
 
+                                self.player_logs.push( PlayerLog {
+                                    player_id: player2.id,
+                                    message: description.to_string()
+                                });
                                 self.resting_players.push( RestingPlayer {
-                                    player: duel_result.player2,
+                                    player: player2,
                                     ready_at,
-                                    last_duel_description: description.to_string(),
                                 });
                             } else {
                                 self.playable_card_count
@@ -229,18 +241,21 @@ impl Game {
                                 {
                                     // Player 1
                                     if !player1.cards.is_empty() && player1.star > 0 {
+                                        self.player_logs.push( PlayerLog { 
+                                            player_id: player1.id,
+                                            message:format!("{} against {} — {} vs {}",
+                                                player1_result.description(),
+                                                player2_name,
+                                                player1_card.emoji(),
+                                                player2_card.emoji(),
+                                            ),
+                                        });
+                                        
                                         self.resting_players.push( RestingPlayer {
                                             player: player1,
                                             ready_at,
-                                            last_duel_description: format!(
-                                                "{} against {} — {:?} vs {:?}",
-                                                player1_result.description(),
-                                                player2_name,
-                                                player1_card,
-                                                player2_card,
-                                            ),
                                         });
-                                    } else if player1.star >= target_star {
+                                    } else if player1.star >= self.target_star {
                                         self.winners.push(PlayerInfo{
                                             id: player1.id,
                                             name: player1.name.clone(),
@@ -258,18 +273,28 @@ impl Game {
 
                                     // Player 2
                                     if !player2.cards.is_empty() && player2.star > 0 {
+                                        self.player_logs.push( PlayerLog { 
+                                            player_id: player2.id,
+                                            message:format!("{} against {} — {} vs {}",
+                                                player2_result.description(),
+                                                player1_name,
+                                                player2_card.emoji(),
+                                                player1_card.emoji(),
+                                            ),
+                                        });
+                                        
                                         self.resting_players.push( RestingPlayer {
                                             player: player2,
                                             ready_at,
-                                            last_duel_description: format!(
-                                                "{} against {} — {:?} vs {:?}",
-                                                player2_result.description(),
-                                                player1_name,
-                                                player2_card,
-                                                player1_card,
-                                            ),
                                         });
-                                    } else if player2.star >= target_star {
+                                    } else if player2.star >= self.target_star {
+                                        self.player_logs.push( PlayerLog { 
+                                            player_id: ALL_PLAYER_ID,
+                                            message:format!("{} won with {} stars!",
+                                                player2.name,
+                                                player2.star),
+                                        });
+
                                         self.winners.push(PlayerInfo{
                                             id: player2.id,
                                             name: player2.name.clone(),
@@ -277,6 +302,14 @@ impl Game {
                                         });
                                         self.players.push(player2);
                                     } else {
+                                        self.player_logs.push(PlayerLog {
+                                            player_id: ALL_PLAYER_ID,
+                                            message: format!(
+                                                "{} was eliminated!",
+                                                player2.name,
+                                            ),
+                                        });
+
                                         self.losers.push(PlayerInfo{
                                             id: player2.id,
                                             name: player2.name.clone(),
@@ -305,7 +338,8 @@ impl Game {
                         playable_card_count: self.playable_card_count,
                     };
                     let player_updates = self.get_in_game_player_updates();
-                    return (game_state, player_updates);
+                    let player_logs = std::mem::take(&mut self.player_logs);
+                    return (game_state, player_updates, player_logs);
                 }
 
                 // No players available to create another duel.
@@ -325,8 +359,8 @@ impl Game {
                     self.status = GameStatus::Finished;
                     let game_state = GameState::Finished {winners: self.winners.clone()};
                     let player_updates = self.get_in_game_player_updates();
-                    return (game_state, player_updates);
-
+                    let player_logs = std::mem::take(&mut self.player_logs);
+                    return (game_state, player_updates, player_logs);
                 }
 
                 
@@ -336,13 +370,15 @@ impl Game {
                     playable_card_count: self.playable_card_count,
                 };
                 let player_updates = self.get_in_game_player_updates();
-                (game_state, player_updates)
+                let player_logs = std::mem::take(&mut self.player_logs);
+                (game_state, player_updates, player_logs)
             },
 
             GameStatus::Finished => {
                 let game_state = GameState::Finished {winners: self.winners.clone()};
                 let player_updates = self.get_in_game_player_updates();
-                return (game_state, player_updates)
+                let player_logs = std::mem::take(&mut self.player_logs);
+                (game_state, player_updates, player_logs)
             },
         }
     }
@@ -383,7 +419,7 @@ impl Game {
 
         let waiting_players: Vec<PlayerUpdate> = self.waiting_players.iter()
             .map(|x| PlayerUpdate {
-                id: x.id,
+                player_id: x.id,
                 state: PlayerState::Waiting {
                     star: x.star,
                     playable_card_count: CardCount::from_cards(&x.cards)
@@ -393,14 +429,13 @@ impl Game {
 
         let resting_players: Vec<PlayerUpdate> = self.resting_players.iter()
             .map(|x| PlayerUpdate {
-                id: x.player.id,
+                player_id: x.player.id,
                 state: PlayerState::Resting {
                     star: x.player.star,
                     playable_card_count: CardCount::from_cards(&x.player.cards),
                     remaining_secs: x.ready_at
                         .saturating_duration_since(Instant::now())
                         .as_secs(),
-                    last_duel_description: x.last_duel_description.clone(),
                 },
             }).collect();
         player_updates.extend(resting_players);
@@ -412,28 +447,36 @@ impl Game {
                 .as_secs();
 
             for player in [&duel.player1, &duel.player2] {
+                let opponent = if player.id == duel.player1.id {
+                    &duel.player2
+                } else {
+                    &duel.player1
+                };
+
                 in_duel_players.push(PlayerUpdate {
-                    id: player.id,
+                    player_id: player.id,
                     state: PlayerState::InDuel {
                         star: player.star,
                         playable_card_count: CardCount::from_cards(&player.cards),
+                        opponent_name: opponent.name.clone(),
                         remaining_secs,
                     },
                 });
             }
+
         }
         player_updates.extend(in_duel_players);
 
         let winners: Vec<PlayerUpdate> = self.winners.iter()
             .map(|x| PlayerUpdate {
-                id: x.id,
+                player_id: x.id,
                 state: PlayerState::Winning {star: x.status},
             }).collect();
         player_updates.extend(winners);
 
         let losers: Vec<PlayerUpdate> = self.losers.iter()
             .map(|x| PlayerUpdate {
-                id: x.id,
+                player_id: x.id,
                 state: PlayerState::Losing,
             }).collect();
         player_updates.extend(losers);
@@ -461,8 +504,13 @@ pub enum GameState {
     Finished{winners: Vec<PlayerInfo>}
 }
 
+pub struct PlayerLog {
+    pub player_id: usize,
+    pub message: String,
+}
+
 pub struct PlayerUpdate{
-    pub id: usize,
+    pub player_id: usize,
     pub state: PlayerState,
 }
 
@@ -476,12 +524,12 @@ pub enum PlayerState { // consider making this as player property
     InDuel {
         star: usize,
         playable_card_count: CardCount,
+        opponent_name: String,
         remaining_secs: u64,
     },
     Resting { // From duel
         star: usize,
         playable_card_count: CardCount,
-        last_duel_description: String,
         remaining_secs: u64,
     },
     Winning {star: usize},

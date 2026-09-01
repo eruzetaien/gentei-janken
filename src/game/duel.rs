@@ -46,7 +46,7 @@ impl Duel {
         }
 
         if let Waiting = self.player2_card {
-            self.player2_card = self.player1.try_choose_card(playable_card_count);
+            self.player2_card = self.player2.try_choose_card(playable_card_count);
         }
 
         let (player1_card, player2_card) =

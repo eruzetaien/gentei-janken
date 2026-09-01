@@ -1,5 +1,7 @@
 use std::collections::VecDeque;
 use std::time::Duration;
+use unicode_width::UnicodeWidthChar;
+use unicode_width::UnicodeWidthStr;
 
 use std::io;
 use crossterm::{
@@ -106,25 +108,39 @@ impl TermUi {
 
         let sep_row = |r: u16| TermRegion { row: r, col: 0, width, height: 1 };
 
-        let mid_top = 3;
-        let mid_bottom = height - 7;
-        let mid_height = mid_bottom.saturating_sub(mid_top);
-
-        let third = width / 3;
-        let log_width = width - third * 2;
-
+        
         self.title       = TermRegion { row: 0, col: 0, width, height: 1 };
         self.subtitle    = TermRegion { row: 1, col: 0, width, height: 1 };
         self.sep1        = sep_row(2);
 
-        self.players_l   = TermRegion { 
-            row: mid_top, col: 0, width: third, height: mid_height
+        let mid_top = 3;
+        let mid_bottom = height - 7;
+        let mid_height = mid_bottom.saturating_sub(mid_top);
+
+        let content_width = width;
+
+        let player_width = content_width * 3 / 10;
+        let log_width = content_width - player_width * 2;
+
+        self.players_l = TermRegion {
+            row: mid_top,
+            col: 0,
+            width: player_width,
+            height: mid_height,
         };
-        self.log         = TermRegion {
-            row: mid_top, col: third, width: log_width, height: mid_height
+
+        self.log = TermRegion {
+            row: mid_top,
+            col: self.players_l.col + self.players_l.width,
+            width: log_width,
+            height: mid_height,
         };
-        self.players_r   = TermRegion {
-            row: mid_top, col: third + log_width, width: third, height: mid_height
+
+        self.players_r = TermRegion {
+            row: mid_top,
+            col: self.log.col + self.log.width,
+            width: player_width,
+            height: mid_height,
         };
 
         self.sep2        = sep_row(mid_bottom);
@@ -157,6 +173,24 @@ impl TermUi {
     }
     // ─── Generic region writer ───────────────────────────────────
 
+
+    fn fit_to_width(text: &str, width: usize) -> String {
+        let mut result = String::new();
+        let mut current_width = 0;
+
+        for c in text.chars() {
+            let char_width = UnicodeWidthChar::width(c).unwrap_or(0);
+
+            if current_width + char_width > width {
+                break;
+            }
+
+            result.push(c);
+            current_width += char_width;
+        }
+
+        result
+    }
     /// Write a line within a multi-line region (row offset from region top).
     fn write_region_line(
         &self,
@@ -167,9 +201,10 @@ impl TermUi {
         let row = region.row + offset;
         let width = region.width as usize;
 
-        let text: String = text.chars().take(width).collect();
+        let text = Self::fit_to_width(text, width);
+        let padding = width.saturating_sub(text.width());
 
-        let line = format!("{:<width$}", text, width = width);
+        let line = format!("{}{}", text, " ".repeat(padding));
 
         execute!(
             io::stdout(),
@@ -260,6 +295,21 @@ impl TermUi {
         Ok(())
     }
 
+    pub fn push_logs(&mut self, messages: Vec<String>) -> io::Result<()> {
+        let capacity = self.log.height as usize;
+
+        for message in messages {
+            self.log_buffer.push_back(message);
+
+            while self.log_buffer.len() > capacity {
+                self.log_buffer.pop_front();
+            }
+        }
+
+        self.render_log()?;
+        Ok(())
+    }
+
     
     fn render_log(&self) -> io::Result<()> {
         let lines = self.log_buffer.len();
@@ -277,18 +327,21 @@ impl TermUi {
                 ""
             };
 
-            // Leave exactly 2 columns for the separators.
-            let text: String = content.chars().take(inner_width).collect();
+            let text = Self::fit_to_width(content, inner_width);
 
-            // Exactly `self.log.width` characters.
-            let line = format!("│{:<width$}│", text, width = inner_width,);
+            let padding = inner_width.saturating_sub(text.width());
+
+            let line = format!(
+                "│{}{}│",
+                text,
+                " ".repeat(padding),
+            );
 
             self.write_region_line(&self.log, i as u16, &line)?;
         }
 
         Ok(())
     }
-
     
 
     pub fn set_players_l(
@@ -338,7 +391,7 @@ impl TermUi {
             self.write_region_line(
                 region,
                 row as u16,
-                &format!("{} - {}",player.name,player.status),
+                &format!("{} {}",player.name,player.status),
             )?;
 
             // // Separator if another player is below.

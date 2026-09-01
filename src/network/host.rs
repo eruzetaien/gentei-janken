@@ -1,3 +1,4 @@
+
 use std::cmp;
 use std::collections::HashMap;
 use std::io;
@@ -14,8 +15,7 @@ use std::time::{Duration, Instant};
 use crate::player_loader::load_players_from_json;
 use crate::constant::HOST_PORT;
 use crate::game::{
-    Game, GameState,
-    Player, OnlineStrategy
+    ALL_PLAYER_ID, Game, GameState, OnlineStrategy, Player, PlayerLog
 };
 use crate::network::{
     PlayerConnection,
@@ -28,6 +28,8 @@ pub struct Host {
     connection_by_id: HashMap<usize, Rc<RefCell<PlayerConnection>>>,
     connection_by_addr: HashMap<SocketAddr, Rc<RefCell<PlayerConnection>>>,
     next_player_id: usize,
+    logs: Vec<String>,
+    player_logs: HashMap<usize, Vec<String>>,
 }
 
 impl Default for Host {
@@ -43,6 +45,8 @@ impl Host {
             connection_by_id: HashMap::new(),
             connection_by_addr: HashMap::new(),
             next_player_id: 0,
+            logs: Vec::new(),
+            player_logs: HashMap::new()
         }
     } 
 
@@ -70,27 +74,41 @@ impl Host {
         let mut buf = [0u8; 1024];
         socket.set_nonblocking(true)?;
         loop {
-            
-            // Drain incoming UDP packets
-            loop {
-                match socket.recv_from(&mut buf) {
-                    Ok((size, addr)) => {
-                        let client_msg: ClientMessage = decode(&buf[..size]);
-                        self.handle_message(client_msg, addr); 
-                    },
-
-                    Err(ref e) if e.kind() == io::ErrorKind::WouldBlock => {
-                        break;
-                    },
-
-                    Err(e) => return Err(e),
-                }
-                
-            }
-            
             let now = Instant::now();
             if now >= next_tick {
-                let (mut game_state, mut player_updates) = self.game.update();
+                // Drain incoming UDP packets
+                loop {
+                    match socket.recv_from(&mut buf) {
+                        Ok((size, addr)) => {
+                            let client_msg: ClientMessage = decode(&buf[..size]);
+                            self.handle_message(client_msg, addr); 
+                        },
+
+                        Err(ref e) if e.kind() == io::ErrorKind::WouldBlock => {
+                            break;
+                        },
+
+                        Err(e) => return Err(e),
+                    }
+                    
+                }
+
+                let (mut game_state,
+                    mut player_updates,
+                    mut player_logs
+                ) = self.game.update();
+                    
+                for player_log in player_logs.drain(..) {
+                    if player_log.player_id == ALL_PLAYER_ID {
+                        self.logs.push(player_log.message);
+                    } else {
+                        self.player_logs
+                            .entry(player_log.player_id)
+                            .or_default()
+                            .push(player_log.message);
+                    }
+                }
+
                 if let GameState::Waiting{player_infos} = game_state {
                     let mut online_player_infos = Vec::new();
                     for mut player_info in player_infos {
@@ -99,7 +117,7 @@ impl Host {
                         {
                             let player_conn = player_conn_ref.borrow();
                             let mut status = 0; // not ready
-                            if player_conn.ready_to_start == true {
+                            if player_conn.ready_to_start {
                                 status = 1;
                             }
                             player_info.status = status;
@@ -117,10 +135,9 @@ impl Host {
                     let player_conn = player_conn_ref.borrow();
 
                     if let Some(index) = player_updates.iter()
-                        .position(|x| x.id == player_conn.id)
+                        .position(|x| x.player_id == player_conn.id)
                     {
-                        let player_state = player_updates.remove(index).state;
-                        
+                        // Game State
                         let mut clone_state = game_state.clone(); 
                         if let GameState::Waiting{player_infos} = &mut clone_state {
                             for player_info in player_infos {
@@ -132,15 +149,24 @@ impl Host {
                             }
                         }
 
+                        // Player State
+                        let player_state = player_updates.remove(index).state;
+                        
+                        // Player Log
+                        let mut player_logs = self.logs.clone(); // todo : store timestamp and do ordering
+                        if let Some(logs) = self.player_logs.remove(&player_conn.id){
+                            player_logs.extend(logs);
+                        }
+
                         let update_msg = HostMessage::Update {
-                            game_state: clone_state, player_state 
+                            game_state: clone_state, player_state, player_logs,
                         }; 
                         socket.send_to(&encode(&update_msg), player_conn.addr)?;
                     } else {
                         panic!("Player connection has no corresponding player update");
                     }
                 }
-                    
+                self.logs.clear();
                 next_tick += tick_rate;
             }            
         }
@@ -149,7 +175,10 @@ impl Host {
     fn handle_message(&mut self, message: ClientMessage, addr:SocketAddr) {
         match message {
             ClientMessage::Join {player_name} => {
-                self.player_join(player_name, addr);
+                let is_success = self.player_join(&player_name, addr);
+                if is_success{
+                    self.logs.push(format!("{} has joined", player_name));
+                }
             },
 
             ClientMessage::SetReady(is_ready) => {
@@ -174,6 +203,7 @@ impl Host {
                     self.game.add_bots(bot_count);
 
                     self.game.start();
+                    self.logs.push("Game has started!".to_string());
                 }
             },
 
@@ -194,14 +224,18 @@ impl Host {
                 }
             },
 
-            ClientMessage::ChooseCardToPlay => {
+            ClientMessage::ChooseCardToPlay(card) => {
+                if let Some(player_conn_ref) = self.connection_by_addr.get(&addr) {
+                    let player_conn = player_conn_ref.borrow();
+                    player_conn.card_tx.send(card).expect("Failed to send player input card");
+                }
             },
         }
     }
 
-    fn player_join(&mut self, player_name: String, addr: SocketAddr) {
+    fn player_join(&mut self, player_name: &str, addr: SocketAddr) -> bool {
         if self.connection_by_addr.contains_key(&addr) {
-            return;
+            return false;
         }
 
         let id = self.next_player_id;
@@ -218,9 +252,10 @@ impl Host {
 
         // Create player
         let online_strategy = OnlineStrategy {card_rx};
-        let new_player = Player::new(id, player_name, online_strategy);
+        let new_player = Player::new(id, player_name.to_string(), online_strategy);
         self.game.add_player(new_player);
 
+        return true;
     }
 }
 

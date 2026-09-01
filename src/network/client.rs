@@ -6,7 +6,7 @@ use std::net::{
 };
 
 use crate::constant::{HOST_PORT, CLIENT_PORT};
-use crate::game::{GameState, PlayerState, CardCount};
+use crate::game::{GameState, PlayerState, CardCount, Card};
 use crate::network::{HostMessage, ClientMessage, encode, decode};
 use crate::ui::{TermUi, KeyResult, PlayerDisplay};
 
@@ -85,31 +85,41 @@ impl Client {
                             },
 
                             PlayerState::InDuel { 
-                                star,
+                                star: _,
                                 playable_card_count,
-                                remaining_secs
+                                opponent_name: _,
+                                remaining_secs: _,
                             } => {
-
+                                match input.to_lowercase().as_str() {
+                                   "r" => if playable_card_count.rock > 0 {
+                                        let msg = ClientMessage::ChooseCardToPlay(Card::Rock);
+                                        _ = socket.send(&encode(&msg));
+                                   },
+                                   "p" => if playable_card_count.paper > 0 {
+                                        let msg = ClientMessage::ChooseCardToPlay(Card::Paper);
+                                        _ = socket.send(&encode(&msg));
+                                   },
+                                   "s" => if playable_card_count.scissors > 0 {
+                                        let msg = ClientMessage::ChooseCardToPlay(Card::Scissors);
+                                        _ = socket.send(&encode(&msg));
+                                   },
+                                   _ => (),
+                               };
                             },
 
-                            PlayerState::Resting {
-                                star,
-                                playable_card_count,
-                                last_duel_description,
-                                remaining_secs,
-                            } => {
+                            PlayerState::Resting {..} => {
                                 if let "y" = input.to_lowercase().as_str() {
                                     let msg = ClientMessage::ReadyForNextDuel;
                                     _ = socket.send(&encode(&msg));
                                 }
                             },
 
-                            PlayerState::Winning { star } => {
-                                todo!()
+                            PlayerState::Winning { .. } => {
+                                
                             },
 
                             PlayerState::Losing => {
-                                todo!()
+                                
                             },
                         }
                     }
@@ -129,20 +139,20 @@ impl Client {
         Ok(socket)
     }
 
-
     fn handle_message(&mut self, message: HostMessage) -> io::Result<()>{
         match message {
-            HostMessage::Update {game_state, player_state} => {
+            HostMessage::Update {game_state, player_state, player_logs} => {
+                self.term_ui.push_logs(player_logs)?;
                 match game_state {
                     GameState::Waiting {player_infos} => {
                         let mut players_display = Vec::new(); 
                         let mut ready_count = 0;
-                        for player_info in player_infos {
-                            let mut status = String::new(); 
+                        for player_info in player_infos{
+                            let mut status = String::new();
                             if player_info.status == 1 {
-                                status.push_str("Ready");
+                                status.push('🟢');
                                 ready_count += 1;
-                            } else {status.push_str("Not Ready");}
+                            } else {status.push('🔴');}
                             
                             if player_info.id == 1 {status.push_str(" [You]");}
 
@@ -166,7 +176,7 @@ impl Client {
                         playable_card_count
                     } => {
                         self.term_ui.set_top_title("Playable Cards:")?;
-                        let card_count_desc = format!("Rock: {}| Paper: {}| Scissors {}",
+                        let card_count_desc = format!("✊:{} | ✋:{} | ✌️:{}",
                             playable_card_count.rock,
                             playable_card_count.paper,
                             playable_card_count.scissors,
@@ -175,8 +185,7 @@ impl Client {
 
                         let mut winners_display = Vec::new(); 
                         for player_info in winners {
-                            let mut status = "*".repeat(player_info.status);
-                            status.push_str(&format!("({})", player_info.status));
+                            let mut status = "⭐".repeat(player_info.status);
                             
                             if player_info.id == 1 {status.push_str(" [You]");}
 
@@ -188,8 +197,7 @@ impl Client {
 
                         let mut players_display = Vec::new(); 
                         for player_info in remaining_players {
-                            let mut status = "*".repeat(player_info.status);
-                            status.push_str(&format!("({})", player_info.status));
+                            let mut status = "⭐".repeat(player_info.status);
                             
                             if player_info.id == 1 {status.push_str(" [You]");}
 
@@ -197,11 +205,25 @@ impl Client {
                                 name: player_info.name, status
                             }})
                         }
-                        self.term_ui.set_players_r("Remaining Players: ", &players_display)?;
+                        self.term_ui
+                            .set_players_r("Remaining Players: ", &players_display)?;
                     },
                     
-                    GameState::Finished {winners} => {
-                        todo!();
+                    GameState::Finished { winners } => {
+                        self.term_ui.set_top_title("Game Over")?;
+                        self.term_ui.set_top_subtitle("Final Results:")?;
+
+                        let mut winners_display = Vec::new(); 
+                        for player_info in winners {
+                            let mut status = "⭐".repeat(player_info.status);
+                            
+                            if player_info.id == 1 {status.push_str(" [You]");}
+
+                            winners_display.push({ PlayerDisplay {
+                                name: player_info.name, status
+                            }})
+                        }
+                        self.term_ui.set_players_l("Winners: ", &winners_display)?;
                     }
                 }
 
@@ -225,28 +247,10 @@ impl Client {
                         )?;
                     },
 
-                    PlayerState::InDuel { 
+                    PlayerState::InDuel {
                         star,
                         playable_card_count,
-                        remaining_secs
-                    } => {
-                        Self::set_player_stats(
-                            &mut self.term_ui,
-                            *star,
-                            playable_card_count,
-                        )?;
-
-                        let instruction = format!(
-                            "Choose Card to Play: [R] Rock, [P] Paper,  [S] Scissors,  |  Time: {}s",
-                            remaining_secs,
-                        );
-                        self.term_ui.set_instruction(&instruction)?;
-                    },
-
-                    PlayerState::Resting {
-                        star,
-                        playable_card_count,
-                        last_duel_description,
+                        opponent_name,
                         remaining_secs,
                     } => {
                         Self::set_player_stats(
@@ -256,8 +260,26 @@ impl Client {
                         )?;
 
                         let instruction = format!(
-                            "{}  |  Ready for the next duel? [Y] Yes  |  {}s",
-                            last_duel_description,
+                            "Duel vs {} | Choose Card: [R]✊, [P]✋, [S]✌️ | Time: {}s",
+                            opponent_name,
+                            remaining_secs,
+                        );
+                        self.term_ui.set_instruction(&instruction)?;
+                    },
+
+                    PlayerState::Resting {
+                        star,
+                        playable_card_count,
+                        remaining_secs,
+                    } => {
+                        Self::set_player_stats(
+                            &mut self.term_ui,
+                            *star,
+                            playable_card_count,
+                        )?;
+
+                        let instruction = format!(
+                            "Ready for the next duel? [Y] Yes | {}s",
                             remaining_secs,
                         );
 
@@ -265,12 +287,16 @@ impl Client {
                     },
 
                     PlayerState::Winning { star } => {
-                        todo!()
-                    },
+                        self.term_ui.set_bot_title("You Win!")?;
+                        self.term_ui.set_bot_subtitle(&format!("You collected {} star", star))?;
+                        self.term_ui.set_instruction("")?;
+                    }
 
                     PlayerState::Losing => {
-                        todo!()
-                    },
+                        self.term_ui.set_bot_title("You Lose")?;
+                        self.term_ui.set_bot_subtitle("Better luck next time!")?;
+                        self.term_ui.set_instruction("")?;
+                    }
                 }
             }
         }
@@ -282,13 +308,12 @@ impl Client {
         star: usize,
         playable_card_count: &CardCount,
     ) -> io::Result<()> {
-        let mut star_str = "*".repeat(star);
-        star_str.push_str(&format!("({})", star));
+        let star_str = "⭐".repeat(star);
 
-        term_ui.set_bot_title(&format!("Stars: {} | Your Cards:", star_str))?;
+        term_ui.set_bot_title(&format!("Stars:{} | Your Cards:", star_str))?;
 
         let card_count_desc = format!(
-            "Rock: {} | Paper: {} | Scissors: {}",
+            "✊:{} | ✋:{} | ✌️:{}",
             playable_card_count.rock,
             playable_card_count.paper,
             playable_card_count.scissors,

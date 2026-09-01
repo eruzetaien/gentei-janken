@@ -1,9 +1,21 @@
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, Clone, serde::Serialize, serde::Deserialize)]
 pub enum Card {
     Rock,
     Paper,
     Scissors,
 }
+
+
+impl Card {
+    pub fn emoji(&self) -> &'static str {
+        match self {
+            Card::Rock => "✊",
+            Card::Paper => "✋",
+            Card::Scissors => "✌️",
+        }
+    }
+}
+
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum PlayResult {

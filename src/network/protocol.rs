@@ -1,6 +1,7 @@
 use serde::ser;
 use serde::de;
 
+use crate::game::Card;
 use crate::game::{GameState,PlayerState};
 
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
@@ -9,7 +10,7 @@ pub enum ClientMessage {
     SetReady(bool), 
     Disconnect,
     ReadyForNextDuel,
-    ChooseCardToPlay,
+    ChooseCardToPlay(Card),
 }
 
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
@@ -17,9 +18,9 @@ pub enum HostMessage {
     Update {
         game_state: GameState,
         player_state: PlayerState,
+        player_logs: Vec<String>,
     }
 }
-
 
 pub fn encode<T: ser::Serialize>(message: &T) -> Vec<u8> {
     postcard::to_stdvec(message)
