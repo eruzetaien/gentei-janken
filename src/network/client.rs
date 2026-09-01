@@ -89,28 +89,31 @@ impl Client {
                                 playable_card_count,
                                 opponent_name: _,
                                 remaining_secs: _,
+                                has_submitted_card,
                             } => {
-                                match input.to_lowercase().as_str() {
-                                   "r" if playable_card_count.rock > 0 => {
-                                        let msg = ClientMessage::ChooseCardToPlay(
-                                            Card::Rock
-                                        );
-                                        _ = socket.send(&encode(&msg));
-                                   },
-                                   "p" if playable_card_count.paper > 0 => {
-                                        let msg = ClientMessage::ChooseCardToPlay(
-                                            Card::Paper
-                                        );
-                                        _ = socket.send(&encode(&msg));
-                                   },
-                                   "s" if playable_card_count.scissors > 0 => {
-                                        let msg = ClientMessage::ChooseCardToPlay(
-                                            Card::Scissors
-                                        );
-                                        _ = socket.send(&encode(&msg));
-                                   },
-                                   _ => (),
-                               };
+                                if !*has_submitted_card {
+                                    match input.to_lowercase().as_str() {
+                                       "r" if playable_card_count.rock > 0 => {
+                                            let msg = ClientMessage::ChooseCardToPlay(
+                                                Card::Rock
+                                            );
+                                            _ = socket.send(&encode(&msg));
+                                       },
+                                       "p" if playable_card_count.paper > 0 => {
+                                            let msg = ClientMessage::ChooseCardToPlay(
+                                                Card::Paper
+                                            );
+                                            _ = socket.send(&encode(&msg));
+                                       },
+                                       "s" if playable_card_count.scissors > 0 => {
+                                            let msg = ClientMessage::ChooseCardToPlay(
+                                                Card::Scissors
+                                            );
+                                            _ = socket.send(&encode(&msg));
+                                       },
+                                       _ => (),
+                                   };
+                                }
                             },
 
                             PlayerState::Resting {..} => {
@@ -272,6 +275,7 @@ impl Client {
                         playable_card_count,
                         opponent_name,
                         remaining_secs,
+                        has_submitted_card,
                     } => {
                         Self::set_player_stats(
                             &mut self.term_ui,
@@ -279,11 +283,18 @@ impl Client {
                             playable_card_count,
                         )?;
 
-                        let instruction = format!(
-                            "Duel vs {} | Choose Card: [R]✊, [P]✋, [S]✌️ | Time: {}s",
+                        let instruction = if *has_submitted_card { 
+                            format!(
+                            "Duel vs {} | waiting for opponnent's decisions...",
+                            opponent_name,
+                            )
+                        } else {
+                            format!(
+                            "Duel vs {} | choose card: [r]✊, [p]✋, [s]✌️ | time: {}s",
                             opponent_name,
                             remaining_secs,
-                        );
+                            )
+                        };
                         self.term_ui.set_instruction(&instruction)?;
                     },
 

@@ -499,11 +499,18 @@ impl Game {
                 .saturating_duration_since(Instant::now())
                 .as_secs();
 
+            
             for player in [&duel.player1, &duel.player2] {
                 let opponent = if player.id == duel.player1.id {
                     &duel.player2
                 } else {
                     &duel.player1
+                };
+
+                let has_submitted_card = if player.id == duel.player1.id {
+                    matches!(duel.player1_card, Availability::Available(_))
+                } else {
+                    matches!(duel.player2_card, Availability::Available(_))
                 };
 
                 in_duel_players.push(PlayerUpdate {
@@ -513,6 +520,7 @@ impl Game {
                         playable_card_count: CardCount::from_cards(&player.cards),
                         opponent_name: opponent.name.clone(),
                         remaining_secs,
+                        has_submitted_card,
                     },
                 });
             }
@@ -579,6 +587,7 @@ pub enum PlayerState { // consider making this as player property
         playable_card_count: CardCount,
         opponent_name: String,
         remaining_secs: u64,
+        has_submitted_card: bool,
     },
     Resting { // From duel
         star: usize,
