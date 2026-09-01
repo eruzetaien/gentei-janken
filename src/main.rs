@@ -1,7 +1,12 @@
 use std::io;
 use std::thread;
+use std::panic;
 
-mod thread_pool;
+use crossterm::{
+    cursor,
+    execute,
+    terminal::{disable_raw_mode, Clear, ClearType},
+};
 
 // use thread_pool::ThreadPool;
 // use gentei_janken::game;
@@ -19,7 +24,7 @@ use gentei_janken::network::Client;
 
 
 fn main() -> io::Result<()> {
-
+    install_panic_hook();
     println!("Please input player name.");
     let mut player_name = String::new();
 
@@ -68,4 +73,15 @@ fn main() -> io::Result<()> {
     Ok(())
 }
 
-
+pub fn install_panic_hook() {
+    let original_hook = panic::take_hook();
+    panic::set_hook(Box::new(move |info| {
+        let _ = disable_raw_mode();
+        let _ = execute!(
+            io::stdout(),
+            cursor::Show,
+            Clear(ClearType::All),
+        );
+        original_hook(info);
+    }));
+}
