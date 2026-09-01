@@ -1,5 +1,4 @@
 
-use std::cmp;
 use std::collections::HashMap;
 use std::io;
 use std::net::{
@@ -195,10 +194,17 @@ impl Host {
                 }
 
                 if all_player_ready {
-                    let max_players = 20;
-                    let total_online_player = self.connection_by_addr.len();
-                    let bot_count = cmp::max(max_players - total_online_player, 0);
-                    self.game.add_bots(bot_count);
+                    let mut player_ids : Vec<usize> = Vec::new();
+                    for player_conn_ref in self.connection_by_addr.values(){
+                        let mut player_conn = player_conn_ref.borrow_mut();
+                        player_conn.ready_to_start = false;
+                        player_ids.push(player_conn.id);
+                    }
+
+                    self.game.retain_players(&player_ids);
+
+                    let max_player = 20;
+                    self.game.fill_with_bots(max_player);
 
                     self.game.start();
                     self.logs.push("Game has started!".to_string());

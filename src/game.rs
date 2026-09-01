@@ -32,7 +32,7 @@ struct RestingPlayer {
 enum GameStatus {
     Waiting,
     Playing,
-    Finished
+    Finished(Instant) // timeout
 }
 
 pub struct Game {
@@ -49,6 +49,7 @@ pub struct Game {
     target_star: usize,
     duel_duration: Duration,
     rest_duration: Duration,
+    restart_duration: Duration,
 }
 
 impl Default for Game {
@@ -73,6 +74,7 @@ impl Game {
             target_star: 5,
             duel_duration: Duration::from_secs(20),
             rest_duration: Duration::from_secs(10),
+            restart_duration: Duration::from_secs(20),
         }
     }
     pub fn add_players(&mut self, mut players: Vec<Player>) {
@@ -93,24 +95,44 @@ impl Game {
         }
     }
 
-    pub fn add_bots(&mut self, count: usize) {
-        let bot_strategies: [fn() -> PlayStrategy; 4] = [
+
+    fn add_bot(&mut self, bot_id: &mut usize) {
+        *bot_id -= 7;
+
+        let strategies: [fn() -> PlayStrategy; 4] = [
             || RandomStrategy,
             || BalancedStrategy,
             || ProbabilityStrategy,
             PlayStrategy::meta_random,
         ];
 
-        let mut bot_id = 999;
-        for _ in 0..count {
-            let rand_index = rand::random_range(0..bot_strategies.len()); 
-            let strategy = bot_strategies[rand_index]();
-            let id = bot_id;
-            let player_name = format!("Bot-{}", id);
-            let bot = Player::new(id, player_name, strategy);
+        let strategy = strategies[rand::random_range(0..strategies.len())];
+        let player = Player::new(
+            *bot_id,
+            format!("Bot-{}", *bot_id),
+            strategy(),
+        );
 
-            self.add_player(bot);
-            bot_id -= 1;
+        self.add_player(player);
+    }
+
+    pub fn add_bots(&mut self, count: usize) {
+        if let GameStatus::Waiting = self.status {
+            let mut bot_id = 1000;
+
+            for _ in 0..count {
+                self.add_bot(&mut bot_id);
+            }
+        }
+    }
+
+    pub fn fill_with_bots(&mut self, max_player: usize) {
+        if let GameStatus::Waiting = self.status {
+            let mut bot_id = 1000;
+
+            while self.players.len() < max_player {
+                self.add_bot(&mut bot_id);
+            }
         }
     }
 
@@ -119,6 +141,12 @@ impl Game {
             .position(|x| x.player.id == player_id) {
             let resting_player = self.resting_players.remove(index);
             self.waiting_players.push_back(resting_player.player);
+        }
+    }
+
+    pub fn retain_players(&mut self, ids: &[usize]) {
+        if let GameStatus::Waiting = self.status {
+            self.players.retain(|player| ids.contains(&player.id));
         }
     }
 
@@ -140,6 +168,11 @@ impl Game {
         
         let total_card_per_type = total_player_card_per_type * total_player;
         self.playable_card_count.reset(total_card_per_type);
+        self.resting_players = Vec::new();
+        self.ongoing_duels = Vec::new();
+        self.winners = Vec::new();
+        self.losers = Vec::new();
+        self.player_logs = Vec::new();
 
         self.waiting_players = mem::take(&mut self.players).into();
         self.status = GameStatus::Playing;
@@ -172,9 +205,15 @@ impl Game {
 
             GameStatus::Playing => {
                 if self.playable_card_count.total() == 0 {
-                    self.status = GameStatus::Finished;
+                    let restart_at = Instant::now() + self.restart_duration;
+                    self.status = GameStatus::Finished(restart_at);
 
-                    let game_state = GameState::Finished {winners: self.winners.clone()};
+                    let game_state = GameState::Finished {
+                        winners: self.winners.clone(),
+                        remaining_secs: restart_at
+                            .saturating_duration_since(Instant::now())
+                            .as_secs(),
+                    };
                     let player_updates = self.get_in_game_player_updates();
                     let player_logs = std::mem::take(&mut self.player_logs);
                     return (game_state, player_updates, player_logs);
@@ -355,8 +394,15 @@ impl Game {
                         });
                         self.players.push(player);
                     }
-                    self.status = GameStatus::Finished;
-                    let game_state = GameState::Finished {winners: self.winners.clone()};
+                    let restart_at = Instant::now() + self.restart_duration;
+                    self.status = GameStatus::Finished(restart_at);
+
+                    let game_state = GameState::Finished {
+                        winners: self.winners.clone(),
+                        remaining_secs: restart_at
+                            .saturating_duration_since(Instant::now())
+                            .as_secs(),
+                    };
                     let player_updates = self.get_in_game_player_updates();
                     let player_logs = std::mem::take(&mut self.player_logs);
                     return (game_state, player_updates, player_logs);
@@ -373,10 +419,18 @@ impl Game {
                 (game_state, player_updates, player_logs)
             },
 
-            GameStatus::Finished => {
-                let game_state = GameState::Finished {winners: self.winners.clone()};
+            GameStatus::Finished(restart_at) => {
+                let game_state = GameState::Finished {
+                    winners: self.winners.clone(),
+                    remaining_secs: restart_at
+                        .saturating_duration_since(Instant::now())
+                        .as_secs(),
+                };
                 let player_updates = self.get_in_game_player_updates();
                 let player_logs = std::mem::take(&mut self.player_logs);
+
+                if Instant::now() >= restart_at {self.status = GameStatus::Waiting}
+
                 (game_state, player_updates, player_logs)
             },
         }
@@ -500,7 +554,7 @@ pub enum GameState {
         winners: Vec<PlayerInfo>,
         playable_card_count: CardCount,
     },
-    Finished{winners: Vec<PlayerInfo>}
+    Finished{winners: Vec<PlayerInfo>, remaining_secs: u64}
 }
 
 pub struct PlayerLog {

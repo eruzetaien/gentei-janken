@@ -91,16 +91,22 @@ impl Client {
                                 remaining_secs: _,
                             } => {
                                 match input.to_lowercase().as_str() {
-                                   "r" => if playable_card_count.rock > 0 {
-                                        let msg = ClientMessage::ChooseCardToPlay(Card::Rock);
+                                   "r" if playable_card_count.rock > 0 => {
+                                        let msg = ClientMessage::ChooseCardToPlay(
+                                            Card::Rock
+                                        );
                                         _ = socket.send(&encode(&msg));
                                    },
-                                   "p" => if playable_card_count.paper > 0 {
-                                        let msg = ClientMessage::ChooseCardToPlay(Card::Paper);
+                                   "p" if playable_card_count.paper > 0 => {
+                                        let msg = ClientMessage::ChooseCardToPlay(
+                                            Card::Paper
+                                        );
                                         _ = socket.send(&encode(&msg));
                                    },
-                                   "s" => if playable_card_count.scissors > 0 {
-                                        let msg = ClientMessage::ChooseCardToPlay(Card::Scissors);
+                                   "s" if playable_card_count.scissors > 0 => {
+                                        let msg = ClientMessage::ChooseCardToPlay(
+                                            Card::Scissors
+                                        );
                                         _ = socket.send(&encode(&msg));
                                    },
                                    _ => (),
@@ -168,6 +174,7 @@ impl Client {
                             ready_count, players_display.len()
                         );
                         self.term_ui.set_players_l(&players_title, &players_display)?;
+                        self.term_ui.set_players_r("", &Vec::new())?;
                     },
 
                     GameState::Playing {
@@ -209,10 +216,11 @@ impl Client {
                             .set_players_r("Remaining Players: ", &players_display)?;
                     },
                     
-                    GameState::Finished { winners } => {
+                    GameState::Finished { winners, remaining_secs } => {
                         self.term_ui.set_top_title("Game Over")?;
-                        self.term_ui.set_top_subtitle("Final Results:")?;
-
+                        self.term_ui.set_top_subtitle(
+                            &format!("Restarting in {}s", remaining_secs)
+                        )?;
                         let mut winners_display = Vec::new(); 
                         for player_info in winners {
                             let mut status = "⭐".repeat(player_info.status);
@@ -224,6 +232,7 @@ impl Client {
                             }})
                         }
                         self.term_ui.set_players_l("Winners: ", &winners_display)?;
+                        self.term_ui.set_players_r("", &Vec::new())?;
                     }
                 }
 
