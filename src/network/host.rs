@@ -3,19 +3,17 @@ use std::cmp;
 use std::collections::HashMap;
 use std::io;
 use std::net::{
-    IpAddr,
     SocketAddr,
     UdpSocket,
 };
 use std::cell::RefCell;
 use std::rc::Rc;
-use std::sync::mpsc::{Receiver, Sender, channel};
+use std::sync::mpsc::{Sender, channel};
 use std::time::{Duration, Instant};
 
-use crate::player_loader::load_players_from_json;
 use crate::constant::HOST_PORT;
 use crate::game::{
-    ALL_PLAYER_ID, Game, GameState, OnlineStrategy, Player, PlayerLog
+    ALL_PLAYER_ID, Game, GameState, OnlineStrategy, Player
 };
 use crate::network::{
     PlayerConnection,
@@ -190,7 +188,7 @@ impl Host {
                 let mut all_player_ready = true;
                 for player_conn_ref in self.connection_by_addr.values(){
                     let player_conn = player_conn_ref.borrow();
-                    if player_conn.ready_to_start == false {
+                    if !player_conn.ready_to_start {
                         all_player_ready = false;
                         break;
                     }
@@ -255,7 +253,7 @@ impl Host {
         let new_player = Player::new(id, player_name.to_string(), online_strategy);
         self.game.add_player(new_player);
 
-        return true;
+        true
     }
 }
 

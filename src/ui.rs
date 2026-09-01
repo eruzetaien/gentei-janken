@@ -393,17 +393,7 @@ impl TermUi {
                 row as u16,
                 &format!("{} {}",player.name,player.status),
             )?;
-
-            // // Separator if another player is below.
-            // if index + 1 < max_players && index + 1 < player_infos.len() {
-            //     let separator = "─".repeat(region.width as usize);
-            //
-            //     self.write_region_line(
-            //         region,
-            //         (row + 1) as u16,
-            //         &separator,
-            //     )?;
-            // }
+            
         }
 
         Ok(())

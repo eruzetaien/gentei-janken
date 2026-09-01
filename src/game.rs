@@ -1,6 +1,5 @@
 use std::{ collections::VecDeque, mem};
 use std::time::{Instant, Duration};
-//use std::sync::mpsc::{channel, Sender, Receiver, TryRecvError};
 
 pub mod card;
 pub mod player;

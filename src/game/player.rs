@@ -1,4 +1,4 @@
-use std::sync::mpsc::{Receiver, Sender, TryRecvError};
+use std::sync::mpsc::Receiver;
 use std::{mem};
 
 use super::card::Card; 

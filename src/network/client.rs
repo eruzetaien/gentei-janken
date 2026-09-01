@@ -5,7 +5,7 @@ use std::net::{
     UdpSocket,
 };
 
-use crate::constant::{HOST_PORT, CLIENT_PORT};
+use crate::constant::HOST_PORT;
 use crate::game::{GameState, PlayerState, CardCount, Card};
 use crate::network::{HostMessage, ClientMessage, encode, decode};
 use crate::ui::{TermUi, KeyResult, PlayerDisplay};
