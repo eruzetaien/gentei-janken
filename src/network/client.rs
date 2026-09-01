@@ -5,7 +5,7 @@ use std::net::{
     UdpSocket,
 };
 
-use crate::constant::HOST_PORT;
+use crate::constant::{HOST_PORT, PLAYER_SELF};
 use crate::game::{GameState, PlayerState, CardCount, Card};
 use crate::network::{HostMessage, ClientMessage, encode, decode};
 use crate::ui::{TermUi, KeyResult, PlayerDisplay};
@@ -160,7 +160,9 @@ impl Client {
                                 ready_count += 1;
                             } else {status.push('🔴');}
                             
-                            if player_info.id == 1 {status.push_str(" [You]");}
+                            if player_info.id == PLAYER_SELF {
+                                status.push_str(" [You]");
+                            }
 
                             players_display.push({ PlayerDisplay {
                                 name: player_info.name, status
@@ -194,7 +196,9 @@ impl Client {
                         for player_info in winners {
                             let mut status = "⭐".repeat(player_info.status);
                             
-                            if player_info.id == 1 {status.push_str(" [You]");}
+                            if player_info.id == PLAYER_SELF {
+                                status.push_str(" [You]");
+                            }
 
                             winners_display.push({ PlayerDisplay {
                                 name: player_info.name, status
@@ -206,7 +210,9 @@ impl Client {
                         for player_info in remaining_players {
                             let mut status = "⭐".repeat(player_info.status);
                             
-                            if player_info.id == 1 {status.push_str(" [You]");}
+                            if player_info.id == PLAYER_SELF {
+                                status.push_str(" [You]");
+                            }
 
                             players_display.push({ PlayerDisplay {
                                 name: player_info.name, status
@@ -225,7 +231,9 @@ impl Client {
                         for player_info in winners {
                             let mut status = "⭐".repeat(player_info.status);
                             
-                            if player_info.id == 1 {status.push_str(" [You]");}
+                            if player_info.id == PLAYER_SELF {
+                                status.push_str(" [You]");
+                            }
 
                             winners_display.push({ PlayerDisplay {
                                 name: player_info.name, status
@@ -239,6 +247,9 @@ impl Client {
                 self.state = player_state;
                 match &self.state {
                     PlayerState::Joined => {
+                        self.term_ui.set_bot_title("")?;
+                        self.term_ui.set_bot_subtitle("")?;
+
                         self.term_ui.set_instruction(
                             "Ready: [Y] Yes, [N] No"
                         )?;
@@ -304,6 +315,7 @@ impl Client {
                     PlayerState::Losing => {
                         self.term_ui.set_bot_title("You Lose")?;
                         self.term_ui.set_bot_subtitle("Better luck next time!")?;
+
                         self.term_ui.set_instruction("")?;
                     }
                 }

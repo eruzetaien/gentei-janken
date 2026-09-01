@@ -10,9 +10,11 @@ use std::rc::Rc;
 use std::sync::mpsc::{Sender, channel};
 use std::time::{Duration, Instant};
 
-use crate::constant::HOST_PORT;
+use crate::constant::{
+    HOST_PORT, ALL_PLAYER_ID, PLAYER_SELF, PLAYER_OTHER
+};
 use crate::game::{
-    ALL_PLAYER_ID, Game, GameState, OnlineStrategy, Player
+    Game, GameState, OnlineStrategy, Player, PlayerInfo
 };
 use crate::network::{
     PlayerConnection,
@@ -136,14 +138,27 @@ impl Host {
                     {
                         // Game State
                         let mut clone_state = game_state.clone(); 
-                        if let GameState::Waiting{player_infos} = &mut clone_state {
-                            for player_info in player_infos {
-                                if player_info.id == player_conn.id {
-                                    player_info.id = 1; // client = player (todo)
-                                } else {
-                                    player_info.id = 0;
-                                }
-                            }
+
+                        match &mut clone_state {
+                            GameState::Waiting{player_infos} => {
+                                Self::mask_player_ids(player_infos , player_conn.id);
+                            },
+
+                            GameState::Playing{
+                                winners,
+                                remaining_players,
+                                playable_card_count: _,
+                            } => {
+                                Self::mask_player_ids(winners, player_conn.id);
+                                Self::mask_player_ids(remaining_players, player_conn.id);
+                            },
+
+                            GameState::Finished{
+                                winners,
+                                remaining_secs: _,
+                            } => {
+                                Self::mask_player_ids(winners, player_conn.id);
+                            },
                         }
 
                         // Player State
@@ -260,6 +275,16 @@ impl Host {
         self.game.add_player(new_player);
 
         true
+    }
+
+    fn mask_player_ids(players: &mut [PlayerInfo], player_id: usize) {
+        for player in players {
+            player.id = if player.id == player_id {
+                PLAYER_SELF
+            } else {
+                PLAYER_OTHER
+            };
+        }
     }
 }
 
