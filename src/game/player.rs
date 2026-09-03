@@ -140,35 +140,41 @@ impl PlayStrategy {
             }
 
             PlayStrategy::ProbabilityStrategy => {
-                let mut choices: Vec<(usize, usize)> = Vec::new(); 
+                let max_count = playable_card_count.max(); 
+                let mut highest_priority_cards = Vec::new();
+                let mut medium_priority_cards = Vec::new();
+                let mut lowest_priority_cards = Vec::new();
 
-                if let Some(idx) = cards.iter().position(|x| *x == Card::Rock) {
-                    choices.push((playable_card_count.rock, idx));
+                if playable_card_count.rock == max_count {
+                    highest_priority_cards.push(Card::Paper);
+                    medium_priority_cards.push(Card::Rock);
+                    lowest_priority_cards.push(Card::Scissors);
                 }
 
-                if let Some(idx) = cards.iter().position(|x| *x == Card::Paper) {
-                    choices.push((playable_card_count.paper, idx));
+                if playable_card_count.paper == max_count {
+                    highest_priority_cards.push(Card::Scissors);
+                    medium_priority_cards.push(Card::Paper);
+                    lowest_priority_cards.push(Card::Rock);
                 }
 
-                if let Some(idx) = cards.iter().position(|x| *x == Card::Scissors) {
-                    choices.push((playable_card_count.scissors, idx));
+                if playable_card_count.scissors == max_count {
+                    highest_priority_cards.push(Card::Rock);
+                    medium_priority_cards.push(Card::Scissors);
+                    lowest_priority_cards.push(Card::Paper);
                 }
+
+                let mut priority_cards = highest_priority_cards;
+                priority_cards.extend(medium_priority_cards);
+                priority_cards.extend(lowest_priority_cards);
                 
-                let min_count = choices
-                    .iter()
-                    .map(|(count,_)| *count)
-                    .min()
-                    .unwrap_or(0);
+                for card in priority_cards {
+                    if let Some(index) = cards.iter().position(|x| *x == card) {
+                        let chosen_card = cards.remove(index);
+                        return Available(chosen_card);
+                    }
+                }
 
-                let candidates: Vec<_> = choices
-                    .iter()
-                    .filter(|(count, _)| *count == min_count)
-                    .collect();
-
-                let chosen = candidates[rand::random_range(0..candidates.len())];
-                let chosen_index = chosen.1; 
-
-                Available(cards.remove(chosen_index))
+                Available(cards.pop().expect("cards should never be empty"))
             }
 
             PlayStrategy::MetaRandomStrategy { strategies } => {
@@ -286,7 +292,6 @@ mod test {
             name: "player1".to_string(),
             star: 0,
             cards: vec![
-                Card::Rock,
                 Card::Paper,
                 Card::Scissors,
             ],
@@ -294,9 +299,9 @@ mod test {
         };
 
         let mut playable_card_count = CardCount::new(0);  
-        playable_card_count.rock = 1; 
+        playable_card_count.rock = 7; 
         playable_card_count.paper = 2; 
-        playable_card_count.scissors = 2; 
+        playable_card_count.scissors = 10; 
 
         let selected_card = loop {
             if let Available(card) = player.try_choose_card(&playable_card_count) {
@@ -304,7 +309,7 @@ mod test {
             }
         };
 
-        assert_eq!(selected_card, Card::Rock);
-        assert_eq!(player.cards.len(), 2);
+        assert_eq!(selected_card, Card::Scissors);
+        assert_eq!(player.cards.len(), 1);
     }
 }
