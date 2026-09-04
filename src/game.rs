@@ -195,6 +195,10 @@ impl CardCount {
             }
         }
     }
+
+    pub fn max(&self) -> usize {
+        self.rock.max(self.paper).max(self.scissors)
+    }
 }
 
 #[cfg(test)]

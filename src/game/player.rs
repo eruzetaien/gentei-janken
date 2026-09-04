@@ -1,14 +1,15 @@
+use rand::seq::SliceRandom;
 use std::{mem, thread, time};
 
-use super::card; 
+use super::card::Card; 
 use super::CardCount;
 
 pub trait PlayStrategy {
     fn choose_card(
         &self,
-        cards: &mut Vec<card::Card>,
+        cards: &mut Vec<Card>,
         playable_card_count: &CardCount
-    ) -> card::Card;
+    ) -> Card;
 }
 
 pub struct RandomStrategy;
@@ -22,7 +23,7 @@ pub struct Player {
     pub name: String,
     pub strategy: Box<dyn PlayStrategy + Send>,
     pub star: usize,
-    pub cards: Vec<card::Card>,
+    pub cards: Vec<Card>,
 }
 
 impl Player {
@@ -34,12 +35,12 @@ impl Player {
             cards: Vec::new(),
         }
     }
-    pub fn init(&mut self, star: usize, cards: Vec<card::Card>) {
+    pub fn init(&mut self, star: usize, cards: Vec<Card>) {
         self.star = star;
         self.cards = cards;
     }
 
-    pub fn set_card_to_play(&mut self, returned_cards: &CardCount ) -> card::Card{
+    pub fn set_card_to_play(&mut self, returned_cards: &CardCount ) -> Card{
         assert!(!self.cards.is_empty());
        
         let think_time = rand::random_range(0..3);
@@ -52,7 +53,7 @@ impl Player {
         self.star += 1;
     }
 
-    pub fn lose_duel(&mut self) -> Vec<card::Card> {
+    pub fn lose_duel(&mut self) -> Vec<Card> {
         self.star -= 1;
 
         if self.star == 0 {
@@ -62,7 +63,7 @@ impl Player {
         vec![] 
     }
 
-    pub fn take_remaining_cards(&mut self) -> Vec<card::Card> {
+    pub fn take_remaining_cards(&mut self) -> Vec<Card> {
         mem::take(&mut self.cards)
     }
 }
@@ -70,9 +71,9 @@ impl Player {
 impl PlayStrategy for RandomStrategy {
     fn choose_card(
         &self,
-        cards: &mut Vec<card::Card>,
+        cards: &mut Vec<Card>,
         _playable_card_count: &CardCount
-    ) -> card::Card 
+    ) -> Card 
     {
         let rand_index = rand::random_range(0..cards.len()); 
         cards.remove(rand_index)
@@ -82,9 +83,9 @@ impl PlayStrategy for RandomStrategy {
 impl PlayStrategy for BalancedStrategy {
     fn choose_card(
         &self,
-        cards: &mut Vec<card::Card>,
+        cards: &mut Vec<Card>,
         _playable_card_count: &CardCount
-    ) -> card::Card 
+    ) -> Card 
     {
         let mut choices = [
             (0,None), // rock (count, index)
@@ -94,15 +95,15 @@ impl PlayStrategy for BalancedStrategy {
 
         for (idx, card) in cards.iter().enumerate() {
             match *card {
-                card::Card::Rock => {
+                Card::Rock => {
                     choices[0].0 += 1;
                     choices[0].1 = Some(idx);
                 },
-                card::Card::Paper => {
+                Card::Paper => {
                     choices[1].0 += 1;
                     choices[1].1 = Some(idx);
                 },
-                card::Card::Scissors => {
+                Card::Scissors => {
                     choices[2].0 += 1;
                     choices[2].1 = Some(idx);
                 },
@@ -137,39 +138,49 @@ impl PlayStrategy for BalancedStrategy {
 impl PlayStrategy for ProbabilityStrategy {
     fn choose_card(
         &self,
-        cards: &mut Vec<card::Card>,
+        cards: &mut Vec<Card>,
         playable_card_count: &CardCount
-    ) -> card::Card {
-        let mut choices: Vec<(usize, usize)> = Vec::new(); 
+    ) -> Card {
+        let max_count = playable_card_count.max(); 
+        let mut highest_priority_cards = Vec::new();
+        let mut medium_priority_cards = Vec::new();
+        let mut lowest_priority_cards = Vec::new();
 
-        if let Some(idx) = cards.iter().position(|x| *x == card::Card::Rock) {
-            choices.push((playable_card_count.rock, idx));
+        if playable_card_count.rock == max_count {
+            highest_priority_cards.push(Card::Paper);
+            medium_priority_cards.push(Card::Rock);
+            lowest_priority_cards.push(Card::Scissors);
         }
 
-        if let Some(idx) = cards.iter().position(|x| *x == card::Card::Paper) {
-            choices.push((playable_card_count.paper, idx));
+        if playable_card_count.paper == max_count {
+            highest_priority_cards.push(Card::Scissors);
+            medium_priority_cards.push(Card::Paper);
+            lowest_priority_cards.push(Card::Rock);
         }
 
-        if let Some(idx) = cards.iter().position(|x| *x == card::Card::Scissors) {
-            choices.push((playable_card_count.scissors, idx));
+        if playable_card_count.scissors == max_count {
+            highest_priority_cards.push(Card::Rock);
+            medium_priority_cards.push(Card::Scissors);
+            lowest_priority_cards.push(Card::Paper);
         }
+
+        let mut rng = rand::rng();
+        highest_priority_cards.shuffle(&mut rng);
+        medium_priority_cards.shuffle(&mut rng);
+        lowest_priority_cards.shuffle(&mut rng);
+
+        let mut priority_cards = highest_priority_cards;
+        priority_cards.extend(medium_priority_cards);
+        priority_cards.extend(lowest_priority_cards);
         
-        let min_count = choices
-            .iter()
-            .map(|(count,_)| *count)
-            .min()
-            .unwrap_or(0);
+        for card in priority_cards {
+            if let Some(index) = cards.iter().position(|x| *x == card) {
+                let chosen_card = cards.remove(index);
+                return chosen_card;
+            }
+        }
 
-        let candidates: Vec<_> = choices
-            .iter()
-            .filter(|(count, _)| *count == min_count)
-            .collect();
-
-        let chosen = candidates[rand::random_range(0..candidates.len())];
-        let chosen_index = chosen.1; 
-
-        cards.remove(chosen_index)
-
+        cards.pop().expect("cards should never be empty")
     }
 }
 
@@ -194,9 +205,9 @@ impl MetaRandomStrategy {
 impl PlayStrategy for MetaRandomStrategy {
     fn choose_card(
         &self,
-        cards: &mut Vec<card::Card>,
+        cards: &mut Vec<Card>,
         playable_card_count: &CardCount
-    ) -> card::Card {
+    ) -> Card {
         let rand_index = rand::random_range(0..self.strategies.len()); 
         self.strategies[rand_index].choose_card(cards, playable_card_count)
     }
@@ -220,9 +231,9 @@ mod test {
         
         let mut initial_cards = Vec::new();
         for _ in 0..total_card {
-            initial_cards.push(card::Card::Rock);
-            initial_cards.push(card::Card::Paper);
-            initial_cards.push(card::Card::Scissors);
+            initial_cards.push(Card::Rock);
+            initial_cards.push(Card::Paper);
+            initial_cards.push(Card::Scissors);
         }
 
         let expected_len = initial_cards.len();
@@ -240,9 +251,9 @@ mod test {
             name: "player1".to_string(),
             star: 0,
             cards: vec![
-                card::Card::Rock,
-                card::Card::Paper,
-                card::Card::Scissors,
+                Card::Rock,
+                Card::Paper,
+                Card::Scissors,
             ],
             strategy: Box::new(RandomStrategy),
         };
@@ -259,10 +270,10 @@ mod test {
             name: "player1".to_string(),
             star: 0,
             cards: vec![
-                card::Card::Rock,
-                card::Card::Rock,
-                card::Card::Paper,
-                card::Card::Scissors,
+                Card::Rock,
+                Card::Rock,
+                Card::Paper,
+                Card::Scissors,
             ],
             strategy: Box::new(BalancedStrategy),
         };
@@ -270,7 +281,7 @@ mod test {
         let playable_card_count = CardCount::new(0); 
         let selected_card = player.set_card_to_play(&playable_card_count);
 
-        assert_eq!(selected_card, card::Card::Rock);
+        assert_eq!(selected_card, Card::Rock);
         assert_eq!(player.cards.len(), 3);
     }
 
@@ -280,9 +291,9 @@ mod test {
             name: "player1".to_string(),
             star: 0,
             cards: vec![
-                card::Card::Rock,
-                card::Card::Paper,
-                card::Card::Scissors,
+                Card::Rock,
+                Card::Paper,
+                Card::Scissors,
             ],
             strategy: Box::new(ProbabilityStrategy),
         };
@@ -294,7 +305,7 @@ mod test {
 
         let selected_card = player.set_card_to_play(&playable_card_count);
 
-        assert_eq!(selected_card, card::Card::Rock);
+        assert_eq!(selected_card, Card::Rock);
         assert_eq!(player.cards.len(), 2);
     }
 }
