@@ -1,12 +1,13 @@
-use std::collections::VecDeque;
-use std::mem;
+use rand::seq::SliceRandom;
 
 pub mod card;
 pub mod player;
 pub mod duel;
 
+pub use player::Player;
+
 pub struct Game {
-    players: Vec<player::Player>,
+    players: Vec<Player>,
     is_playing: bool,
 }
 
@@ -23,12 +24,12 @@ impl Game {
             is_playing: false,
         }
     }
-    pub fn add_players(&mut self, mut players: Vec<player::Player>) {
+    pub fn add_players(&mut self, mut players: Vec<Player>) {
         if self.is_playing {return;}
 
         self.players.append(&mut players);
     }
-    pub fn add_player(&mut self, player: player::Player) {
+    pub fn add_player(&mut self, player: Player) {
         if self.is_playing {return;}
 
         self.players.push(player);
@@ -57,8 +58,7 @@ impl Game {
         let total_playable_card_per_type = total_card_per_type * total_player;
         let mut playable_card_count = CardCount::new(total_playable_card_per_type);
 
-        let mut waiting_players: VecDeque<player::Player> =
-            mem::take(&mut self.players).into();
+        let mut waiting_players = self.players;
 
         let mut winners = Vec::new();
         let mut losers = Vec::new();
@@ -66,7 +66,7 @@ impl Game {
         println!("Game start!");
         while playable_card_count.total() > 0  {
             if waiting_players.len() < 2 {
-                if let Some(mut player) = waiting_players.pop_front() {
+                if let Some(mut player) = waiting_players.pop() {
                     println!("There's no player left as an opponent for {:?}",
                         &player.name);
                     let remaining_cards = player.take_remaining_cards();
@@ -76,29 +76,28 @@ impl Game {
                 }
                 break;
             } 
-            let player1 = waiting_players.pop_front().unwrap();
-            let player2 = waiting_players.pop_front().unwrap();
-
-            let duel = duel::Duel {
-                player1,
-                player2,
-            }; 
-            let result = duel.play(&playable_card_count);
-            
-            playable_card_count.remove(result.returned_cards);
-            
-            for player in [result.player1, result.player2] {
-                if !player.cards.is_empty() && player.star > 0 {
-                    waiting_players.push_back(player);
-                } else if player.star >= target_star {
-                    println!( "{:?} win with star: {:?}",
-                        &player.name,
-                        &player.star,
-                    );
-                    winners.push(player);
-                } else {
-                    println!( "{:?} lose", &player.name);
-                    losers.push(player);
+            if let Some((player1,player2)) = Self::matchmaking(&mut waiting_players){
+                let duel = duel::Duel {
+                    player1,
+                    player2,
+                }; 
+                let result = duel.play(&playable_card_count);
+                
+                playable_card_count.remove(result.returned_cards);
+                
+                for player in [result.player1, result.player2] {
+                    if !player.cards.is_empty() && player.star > 0 {
+                        waiting_players.push(player);
+                    } else if player.star >= target_star {
+                        println!( "{:?} win with star: {:?}",
+                            &player.name,
+                            &player.star,
+                        );
+                        winners.push(player);
+                    } else {
+                        println!( "{:?} lose", &player.name);
+                        losers.push(player);
+                    }
                 }
             }
         }
@@ -121,6 +120,18 @@ impl Game {
         assert_eq!(total_player_star, total_player * star);
     }
 
+    fn matchmaking(players: &mut Vec<Player>) -> Option<(Player,Player)> {
+        if players.len() < 2 {
+            return None;
+        }
+
+        players.shuffle(&mut rand::rng());
+
+        let player1 = players.pop().unwrap();
+        let player2 = players.pop().unwrap();
+
+        Some((player1,player2))
+    }
 }
 
 pub struct CardCount {
@@ -168,7 +179,7 @@ mod tests {
             is_playing: false,
         };
 
-        let new_player = player::Player{
+        let new_player = Player{
             name: "player1".to_string(),
             star: 0,
             cards: Vec::new(),
