@@ -1,4 +1,4 @@
-use std::{ collections::VecDeque, mem};
+use rand::seq::SliceRandom;
 use std::sync::{ Arc, RwLock};
 use std::sync::mpsc::{channel, Sender, Receiver, TryRecvError};
 
@@ -71,8 +71,7 @@ impl Game {
         let playable_card_count = 
             Arc::new(RwLock::new(CardCount::new(total_card_per_type)));
 
-        let mut waiting_players: VecDeque<Player> =
-            mem::take(&mut self.players).into();
+        let mut waiting_players: Vec<Player> = self.players;
 
         let mut winners = Vec::new();
         let mut losers = Vec::new();
@@ -92,7 +91,7 @@ impl Game {
 
                     for player in [duel_result.player1, duel_result.player2] {
                         if !player.cards.is_empty() && player.star > 0 {
-                            waiting_players.push_back(player);
+                            waiting_players.push(player);
                         } else if player.star >= target_star {
                             println!( "{:?} win with star: {:?}",
                                 &player.name,
@@ -118,7 +117,7 @@ impl Game {
                     continue;
                 }
 
-                if let Some(mut player) = waiting_players.pop_front() {
+                if let Some(mut player) = waiting_players.pop() {
                     println!("There's no player left as an opponent for {:?}",
                         &player.name);
                     let remaining_cards = player.take_remaining_cards();
@@ -129,23 +128,26 @@ impl Game {
                 break;
             }
 
-            let player1 = waiting_players.pop_front().unwrap();
-            let player2 = waiting_players.pop_front().unwrap();
-            total_duel += 1;
+            if total_duel > 0 {continue;} // round is not over
 
-            let tx_clone = tx.clone();
-            let card_count = Arc::clone(&playable_card_count);
-            pool.execute(move || {
-                let duel = Duel {
-                    player1,
-                    player2,
-                }; 
+            while let Some((player1,player2)) = Self::matchmaking(&mut waiting_players) {
+                total_duel += 1;
 
-                let duel_result = duel.play(&card_count.read().unwrap());
-                tx_clone.send(duel_result)
-                    .expect("failed to send duel result");
-            });
+                let tx_clone = tx.clone();
+                let card_count = Arc::clone(&playable_card_count);
+                pool.execute(move || {
+                    let duel = Duel {
+                        player1,
+                        player2,
+                    }; 
 
+                    let duel_result = duel.play(&card_count.read().unwrap());
+                    tx_clone.send(duel_result)
+                        .expect("failed to send duel result");
+                });
+
+            }
+            
         }
         println!("\nGame finished!");
 
@@ -164,6 +166,19 @@ impl Game {
         }
 
         assert_eq!(total_player_star, total_player * star);
+    }
+    
+    fn matchmaking(players: &mut Vec<Player>) -> Option<(Player,Player)> {
+        if players.len() < 2 {
+            return None;
+        }
+
+        players.shuffle(&mut rand::rng());
+
+        let player1 = players.pop().unwrap();
+        let player2 = players.pop().unwrap();
+
+        Some((player1,player2))
     }
 
 }

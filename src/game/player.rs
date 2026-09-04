@@ -291,7 +291,6 @@ mod test {
             name: "player1".to_string(),
             star: 0,
             cards: vec![
-                Card::Rock,
                 Card::Paper,
                 Card::Scissors,
             ],
@@ -299,13 +298,13 @@ mod test {
         };
 
         let mut playable_card_count = CardCount::new(0);  
-        playable_card_count.rock = 1; 
+        playable_card_count.rock = 7; 
         playable_card_count.paper = 2; 
-        playable_card_count.scissors = 2; 
+        playable_card_count.scissors = 10; 
 
         let selected_card = player.set_card_to_play(&playable_card_count);
 
-        assert_eq!(selected_card, Card::Rock);
-        assert_eq!(player.cards.len(), 2);
+        assert_eq!(selected_card, Card::Scissors);
+        assert_eq!(player.cards.len(), 1);
     }
 }
