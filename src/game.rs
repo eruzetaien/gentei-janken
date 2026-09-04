@@ -1,4 +1,5 @@
-use std::{ collections::VecDeque, mem};
+use rand::seq::SliceRandom;
+use std::mem;
 use std::time::{Instant, Duration};
 
 pub mod card;
@@ -40,7 +41,7 @@ pub struct Game {
     status: GameStatus,
     playable_card_count: CardCount,
     resting_players: Vec<RestingPlayer>, // Idle -> Waiting -> Duel -> Idle
-    waiting_players: VecDeque<Player>, // Waiting for duel
+    waiting_players: Vec<Player>, // Waiting for duel
     ongoing_duels: Vec<Duel>,
     winners: Vec<PlayerInfo>,
     losers: Vec<PlayerInfo>,
@@ -65,7 +66,7 @@ impl Game {
             status: GameStatus::Waiting,
             playable_card_count: CardCount::new(0),
             resting_players: Vec::new(),
-            waiting_players: VecDeque::new(),
+            waiting_players: Vec::new(),
             ongoing_duels: Vec::new(),
             winners: Vec::new(),
             losers: Vec::new(),
@@ -140,7 +141,7 @@ impl Game {
         if let Some(index) = self.resting_players.iter()
             .position(|x| x.player.id == player_id) {
             let resting_player = self.resting_players.remove(index);
-            self.waiting_players.push_back(resting_player.player);
+            self.waiting_players.push(resting_player.player);
         }
     }
 
@@ -148,6 +149,19 @@ impl Game {
         if let GameStatus::Waiting = self.status {
             self.players.retain(|player| ids.contains(&player.id));
         }
+    }
+
+    fn matchmaking(players: &mut Vec<Player>) -> Option<(Player,Player)> {
+        if players.len() < 2 {
+            return None;
+        }
+
+        players.shuffle(&mut rand::rng());
+
+        let player1 = players.pop().unwrap();
+        let player2 = players.pop().unwrap();
+
+        Some((player1,player2))
     }
 
     pub fn start(&mut self) {
@@ -174,7 +188,7 @@ impl Game {
         self.losers = Vec::new();
         self.player_logs = Vec::new();
 
-        self.waiting_players = mem::take(&mut self.players).into();
+        self.waiting_players = mem::take(&mut self.players);
         self.status = GameStatus::Playing;
     }
 
@@ -221,7 +235,7 @@ impl Game {
                 let mut players_still_resting = Vec::new();
                 for resting_player in self.resting_players.drain(..){
                     if Instant::now() > resting_player.ready_at {
-                        self.waiting_players.push_back(resting_player.player);
+                        self.waiting_players.push(resting_player.player);
                     } else {
                         players_still_resting.push(resting_player);
                     }
@@ -378,10 +392,9 @@ impl Game {
                 self.ongoing_duels = remaining_duels;
 
                 // Create new duel if possible
-                if self.waiting_players.len() >= 2 {
-                    let player1 = self.waiting_players.pop_front().unwrap();
-                    let player2 = self.waiting_players.pop_front().unwrap();
-
+                if let Some((player1,player2)) =
+                    Self::matchmaking(&mut self.waiting_players)
+                {
                     let timeout_at = Instant::now() + self.duel_duration;
                     self.ongoing_duels.push(Duel::new(player1, player2, timeout_at));
 
@@ -397,10 +410,15 @@ impl Game {
 
                 // No players available to create another duel.
                 if self.ongoing_duels.is_empty() && self.resting_players.is_empty() {
-                    if let Some(mut player) = self.waiting_players.pop_front() {
+                    if let Some(mut player) = self.waiting_players.pop() {
                         // There's no player left as an opponent,
                         let remaining_cards = player.take_remaining_cards();
                         self.playable_card_count.remove(remaining_cards);
+
+                        self.player_logs.push( PlayerLog {
+                            player_id: player.id,
+                            message:"There's no opponent left".to_string(),
+                        });
 
                         self.losers.push(PlayerInfo{
                             id: player.id,
@@ -419,7 +437,7 @@ impl Game {
                             .as_secs(),
                     };
                     let player_updates = self.get_in_game_player_updates();
-                    let player_logs = std::mem::take(&mut self.player_logs);
+                    let player_logs = mem::take(&mut self.player_logs);
                     return (game_state, player_updates, player_logs);
                 }
 

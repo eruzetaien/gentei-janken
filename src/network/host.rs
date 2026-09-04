@@ -189,7 +189,7 @@ impl Host {
             ClientMessage::Join {player_name} => {
                 let is_success = self.player_join(&player_name, addr);
                 if is_success{
-                    self.logs.push(format!("{} has joined", player_name));
+                    self.logs.push(format!("{} has joined!", player_name));
                 }
             },
 
