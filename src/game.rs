@@ -294,6 +294,13 @@ impl Game {
                                             ready_at,
                                         });
                                     } else if player1.star >= self.target_star {
+                                        self.player_logs.push( PlayerLog {
+                                            player_id: ALL_PLAYER_ID,
+                                            message:format!("{} won with {} stars!",
+                                                player1.name,
+                                                player1.star),
+                                        });
+
                                         self.winners.push(PlayerInfo{
                                             id: player1.id,
                                             name: player1.name.clone(),
@@ -301,6 +308,14 @@ impl Game {
                                         });
                                         self.players.push(player1);
                                     } else {
+                                        self.player_logs.push(PlayerLog {
+                                            player_id: ALL_PLAYER_ID,
+                                            message: format!(
+                                                "{} was eliminated!",
+                                                player1.name,
+                                            ),
+                                        });
+
                                         self.losers.push(PlayerInfo{
                                             id: player1.id,
                                             name: player1.name.clone(),
