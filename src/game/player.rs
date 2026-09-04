@@ -1,3 +1,4 @@
+use rand::seq::SliceRandom;
 use std::sync::mpsc::Receiver;
 use std::{mem};
 
@@ -162,6 +163,11 @@ impl PlayStrategy {
                     medium_priority_cards.push(Card::Scissors);
                     lowest_priority_cards.push(Card::Paper);
                 }
+
+                let mut rng = rand::rng();
+                highest_priority_cards.shuffle(&mut rng);
+                medium_priority_cards.shuffle(&mut rng);
+                lowest_priority_cards.shuffle(&mut rng);
 
                 let mut priority_cards = highest_priority_cards;
                 priority_cards.extend(medium_priority_cards);
